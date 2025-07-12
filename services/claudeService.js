@@ -1,6 +1,7 @@
 // services/claudeService.js
 const fetch = require('node-fetch');
 
+// Claude API Key
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 
 const styleVariants = [
@@ -78,6 +79,311 @@ async function callClaudeForICP(inputs) {
   };
 }
 
+// New function for step-by-step content generation
+function generateStepPrompt(currentStep, formData, companyName) {
+  const stepPrompts = {
+    1: `Based on the company "${companyName}" and their website "${formData.companyUrl}", suggest 3-5 main products or services they offer. Focus on their core value propositions and what they actually sell. 
+
+IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Product 1", "Product 2", "Product 3"]`,
+    
+    2: `Based on the company "${companyName}" and their products "${formData.products.join(', ')}", suggest 3-5 target buyer personas. These should be decision-makers who would purchase these products. Include job titles and brief descriptions.
+
+IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["VP of Engineering", "Marketing Director", "Sales Manager"]`,
+    
+    3: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and target personas "${formData.personas.join(', ')}", suggest 3-5 specific use cases or scenarios where customers would use these products.
+
+IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Use case 1", "Use case 2", "Use case 3"]`,
+    
+    4: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and use cases "${formData.useCases.join(', ')}", write a compelling differentiation statement. What makes this company unique? What's their competitive advantage?
+
+IMPORTANT: Return ONLY a single string. No explanation, no markdown, just the string.
+
+Example format: "Our unique value proposition is..."`,
+    
+    5: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and differentiation "${formData.differentiation}", suggest 3-5 market segments they should target. Consider industry, company size, geography, etc.
+
+IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Segment 1", "Segment 2", "Segment 3"]`,
+    
+    6: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and market segments "${formData.segments.join(', ')}", suggest 3-5 direct competitors. Include both company names and their websites.
+
+IMPORTANT: Return ONLY a valid JSON array of objects with "name" and "url" properties. No explanation, no markdown, just the JSON array.
+
+Example format: [{"name": "Competitor 1", "url": "https://competitor1.com"}, {"name": "Competitor 2", "url": "https://competitor2.com"}]`
+  };
+
+  return stepPrompts[currentStep] || '';
+}
+
+async function generateStepContent(currentStep, formData, companyName) {
+  try {
+    const prompt = generateStepPrompt(currentStep, formData, companyName);
+    
+    if (!prompt) {
+      return { success: false, error: 'Invalid step' };
+    }
+
+    console.log(`Generating suggestions for step ${currentStep} with prompt:`, prompt);
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    
+    console.log('Claude response:', data);
+    
+    if (!data?.content?.[0]?.text) {
+      console.error('No content in Claude response:', data);
+      return { success: false, error: 'No response from Claude' };
+    }
+
+    const responseText = data.content[0].text.trim();
+    console.log('Claude response text:', responseText);
+
+    try {
+      // Try to parse as JSON first
+      const suggestions = JSON.parse(responseText);
+      return { success: true, suggestions };
+    } catch (err) {
+      console.error('JSON parsing failed, trying to extract JSON from text:', err);
+      
+      // Try to extract JSON from the response
+      const jsonMatch = responseText.match(/\[.*\]/);
+      if (jsonMatch) {
+        try {
+          const suggestions = JSON.parse(jsonMatch[0]);
+          return { success: true, suggestions };
+        } catch (extractErr) {
+          console.error('Failed to parse extracted JSON:', extractErr);
+        }
+      }
+      
+      // If it's step 4 (differentiation), return the text as a string
+      if (currentStep === 4) {
+        return { success: true, suggestions: responseText };
+      }
+      
+      // For other steps, return empty array as fallback
+      console.log('Returning empty array as fallback');
+      return { success: true, suggestions: [] };
+    }
+  } catch (error) {
+    console.error('Claude step generation error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Generate detailed persona information
+async function generatePersonaDetails(personaTitle, companyData) {
+  const prompt = `You are a senior GTM strategist. Based on the persona "${personaTitle}" and the company context below, generate detailed persona information.
+
+Company: ${companyData.companyName}
+Products: ${companyData.products ? companyData.products.join(', ') : 'N/A'}
+Industry: Technology/Engineering Education
+
+Generate comprehensive persona details including:
+- Pain points (5-7 specific challenges)
+- Goals and objectives (5-7 items)
+- Daily responsibilities (5-7 items)
+- Key challenges they face (5-7 items)
+- Preferred communication channels
+- Decision-making triggers
+- Objections they might have
+- Demographics and profile information
+
+Return ONLY valid JSON with these exact fields:
+{
+  "painPoints": [],
+  "goals": [],
+  "responsibilities": [],
+  "challenges": [],
+  "channels": [],
+  "triggers": [],
+  "objections": [],
+  "demographics": {
+    "experience": "",
+    "education": "",
+    "industry": "",
+    "teamSize": "",
+    "budget": ""
+  }
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const responseText = data?.content?.[0]?.text || '{}';
+    
+    try {
+      return { success: true, data: JSON.parse(responseText) };
+    } catch (parseError) {
+      return { success: false, error: 'Failed to parse Claude response' };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Generate detailed segment information
+async function generateSegmentDetails(segmentDescription, companyData) {
+  const prompt = `You are a senior GTM strategist. Based on the segment "${segmentDescription}" and the company context below, generate detailed segment analysis.
+
+Company: ${companyData.companyName}
+Products: ${companyData.products ? companyData.products.join(', ') : 'N/A'}
+Industry: Technology/Engineering Education
+
+Generate comprehensive segment details including:
+- Key characteristics and firmographics
+- Specific pain points this segment faces
+- Market size and growth potential
+- Buying behavior patterns
+- Qualification criteria
+- Competitive landscape
+- Success metrics and KPIs
+
+Return ONLY valid JSON with these exact fields:
+{
+  "characteristics": [],
+  "painPoints": [],
+  "marketSize": "",
+  "growthRate": "",
+  "buyingBehavior": {
+    "decisionTimeframe": "",
+    "budgetRange": "",
+    "decisionMakers": [],
+    "evaluationCriteria": []
+  },
+  "qualification": {
+    "idealCriteria": [],
+    "disqualifyingCriteria": [],
+    "lookalikeCompanies": []
+  }
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const responseText = data?.content?.[0]?.text || '{}';
+    
+    try {
+      return { success: true, data: JSON.parse(responseText) };
+    } catch (parseError) {
+      return { success: false, error: 'Failed to parse Claude response' };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Generate detailed product information
+async function generateProductDetails(productName, companyData) {
+  const prompt = `You are a senior GTM strategist. Based on the product "${productName}" and the company context below, generate detailed product information.
+
+Company: ${companyData.companyName}
+Product: ${productName}
+Industry: Technology/Engineering Education
+
+Generate comprehensive product details including:
+- Key features and capabilities
+- Problems it solves
+- Unique selling propositions
+- Target use cases
+- Benefits and value props
+- Competitive advantages
+- Implementation considerations
+
+Return ONLY valid JSON with these exact fields:
+{
+  "features": [],
+  "problems": [],
+  "usps": [],
+  "useCases": [],
+  "benefits": [],
+  "competitiveAdvantages": [],
+  "implementation": {
+    "timeToValue": "",
+    "complexity": "",
+    "requirements": [],
+    "successFactors": []
+  }
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const responseText = data?.content?.[0]?.text || '{}';
+    
+    try {
+      return { success: true, data: JSON.parse(responseText) };
+    } catch (parseError) {
+      return { success: false, error: 'Failed to parse Claude response' };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
-  callClaudeForICP
+  callClaudeForICP,
+  generateStepContent,
+  generatePersonaDetails,
+  generateSegmentDetails,
+  generateProductDetails
 };
