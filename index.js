@@ -1,7 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
-const cors = require("cors"); // ✅ Add this
+const cors = require("cors");
 
 dotenv.config();
 
@@ -10,9 +10,9 @@ const workspaceRoutes = require("./routes/workspace");
 
 const app = express();
 
-// ✅ Enable CORS for frontend origin
+// Enable CORS for frontend origins
 app.use(cors({
-  origin: "http://localhost:8080", // your frontend URL
+  origin: ["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"],
   credentials: true
 }));
 
