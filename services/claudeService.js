@@ -130,7 +130,7 @@ async function generateStepContent(currentStep, formData, companyName) {
       return { success: false, error: 'Invalid step' };
     }
 
-    console.log(`Generating suggestions for step ${currentStep} with prompt:`, prompt);
+
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -148,7 +148,7 @@ async function generateStepContent(currentStep, formData, companyName) {
 
     const data = await res.json();
     
-    console.log('Claude response:', data);
+
     
     if (!data?.content?.[0]?.text) {
       console.error('No content in Claude response:', data);
@@ -156,7 +156,7 @@ async function generateStepContent(currentStep, formData, companyName) {
     }
 
     const responseText = data.content[0].text.trim();
-    console.log('Claude response text:', responseText);
+
 
     try {
       // Try to parse as JSON first
@@ -182,7 +182,7 @@ async function generateStepContent(currentStep, formData, companyName) {
       }
       
       // For other steps, return empty array as fallback
-      console.log('Returning empty array as fallback');
+  
       return { success: true, suggestions: [] };
     }
   } catch (error) {
@@ -200,13 +200,13 @@ Products: ${companyData.products ? companyData.products.join(', ') : 'N/A'}
 Industry: Technology/Engineering Education
 
 Generate comprehensive persona details including:
-- Pain points (5-7 specific challenges)
-- Goals and objectives (5-7 items)
-- Daily responsibilities (5-7 items)
-- Key challenges they face (5-7 items)
-- Preferred communication channels
-- Decision-making triggers
-- Objections they might have
+- Pain points (up to 4 specific challenges)
+- Goals and objectives (up to 4 items)
+- Daily responsibilities (up to 4 items)
+- Key challenges they face (up to 4 items)
+- Preferred communication channels (up to 4)
+- Decision-making triggers (up to 4)
+- Objections they might have (up to 4)
 - Demographics and profile information
 
 Return ONLY valid JSON with these exact fields:
@@ -244,9 +244,17 @@ Return ONLY valid JSON with these exact fields:
 
     const data = await res.json();
     const responseText = data?.content?.[0]?.text || '{}';
-    
     try {
-      return { success: true, data: JSON.parse(responseText) };
+      let parsed = JSON.parse(responseText);
+      // Truncate all arrays to 4 items
+      parsed.painPoints = (parsed.painPoints || []).slice(0, 4);
+      parsed.goals = (parsed.goals || []).slice(0, 4);
+      parsed.responsibilities = (parsed.responsibilities || []).slice(0, 4);
+      parsed.challenges = (parsed.challenges || []).slice(0, 4);
+      parsed.channels = (parsed.channels || []).slice(0, 4);
+      parsed.triggers = (parsed.triggers || []).slice(0, 4);
+      parsed.objections = (parsed.objections || []).slice(0, 4);
+      return { success: true, data: parsed };
     } catch (parseError) {
       return { success: false, error: 'Failed to parse Claude response' };
     }
@@ -264,11 +272,11 @@ Products: ${companyData.products ? companyData.products.join(', ') : 'N/A'}
 Industry: Technology/Engineering Education
 
 Generate comprehensive segment details including:
-- Key characteristics and firmographics
-- Specific pain points this segment faces
+- Key characteristics and firmographics (up to 4)
+- Specific pain points this segment faces (up to 4)
 - Market size and growth potential
-- Buying behavior patterns
-- Qualification criteria
+- Buying behavior patterns (up to 4 for each array)
+- Qualification criteria (up to 4 for each array)
 - Competitive landscape
 - Success metrics and KPIs
 
@@ -308,9 +316,21 @@ Return ONLY valid JSON with these exact fields:
 
     const data = await res.json();
     const responseText = data?.content?.[0]?.text || '{}';
-    
     try {
-      return { success: true, data: JSON.parse(responseText) };
+      let parsed = JSON.parse(responseText);
+      // Truncate all arrays to 4 items
+      parsed.characteristics = (parsed.characteristics || []).slice(0, 4);
+      parsed.painPoints = (parsed.painPoints || []).slice(0, 4);
+      if (parsed.buyingBehavior) {
+        parsed.buyingBehavior.decisionMakers = (parsed.buyingBehavior.decisionMakers || []).slice(0, 4);
+        parsed.buyingBehavior.evaluationCriteria = (parsed.buyingBehavior.evaluationCriteria || []).slice(0, 4);
+      }
+      if (parsed.qualification) {
+        parsed.qualification.idealCriteria = (parsed.qualification.idealCriteria || []).slice(0, 4);
+        parsed.qualification.disqualifyingCriteria = (parsed.qualification.disqualifyingCriteria || []).slice(0, 4);
+        parsed.qualification.lookalikeCompanies = (parsed.qualification.lookalikeCompanies || []).slice(0, 4);
+      }
+      return { success: true, data: parsed };
     } catch (parseError) {
       return { success: false, error: 'Failed to parse Claude response' };
     }
@@ -328,13 +348,13 @@ Product: ${productName}
 Industry: Technology/Engineering Education
 
 Generate comprehensive product details including:
-- Key features and capabilities
-- Problems it solves
-- Unique selling propositions
-- Target use cases
-- Benefits and value props
-- Competitive advantages
-- Implementation considerations
+- Key features and capabilities (up to 4)
+- Problems it solves (up to 4)
+- Unique selling propositions (up to 4)
+- Target use cases (up to 4)
+- Benefits and value props (up to 4)
+- Competitive advantages (up to 4)
+- Implementation considerations (up to 4 for each array)
 
 Return ONLY valid JSON with these exact fields:
 {
@@ -369,9 +389,20 @@ Return ONLY valid JSON with these exact fields:
 
     const data = await res.json();
     const responseText = data?.content?.[0]?.text || '{}';
-    
     try {
-      return { success: true, data: JSON.parse(responseText) };
+      let parsed = JSON.parse(responseText);
+      // Truncate all arrays to 4 items
+      parsed.features = (parsed.features || []).slice(0, 4);
+      parsed.problems = (parsed.problems || []).slice(0, 4);
+      parsed.usps = (parsed.usps || []).slice(0, 4);
+      parsed.useCases = (parsed.useCases || []).slice(0, 4);
+      parsed.benefits = (parsed.benefits || []).slice(0, 4);
+      parsed.competitiveAdvantages = (parsed.competitiveAdvantages || []).slice(0, 4);
+      if (parsed.implementation) {
+        parsed.implementation.requirements = (parsed.implementation.requirements || []).slice(0, 4);
+        parsed.implementation.successFactors = (parsed.implementation.successFactors || []).slice(0, 4);
+      }
+      return { success: true, data: parsed };
     } catch (parseError) {
       return { success: false, error: 'Failed to parse Claude response' };
     }

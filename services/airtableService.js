@@ -155,9 +155,9 @@ function mapStepDataToAirtableFields(stepData) {
 
 async function submitToAirtable(stepData) {
   try {
-    console.log('Submitting to Airtable with data:', JSON.stringify(stepData, null, 2));
+
     const mappedFields = mapStepDataToAirtableFields(stepData);
-    console.log('Mapped fields:', JSON.stringify(mappedFields, null, 2));
+    
     
     const record = await base(TABLE_NAME).create([
       {
