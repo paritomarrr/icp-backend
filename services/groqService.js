@@ -1,8 +1,8 @@
 // services/claudeService.js
 const fetch = require('node-fetch');
 
-// Claude API Key
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+// Groq API Key (set GROQ_API_KEY in your environment)
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const styleVariants = [
   "Focus on strategic depth and market positioning for large enterprise buyers.",
@@ -46,15 +46,14 @@ async function callClaudeForICP(inputs) {
     [1, 2, 3, 4].map(async (variant) => {
       const prompt = generateClaudePrompt(inputs, variant);
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01'
+          'Authorization': `Bearer ${GROQ_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'llama3-70b-8192',
           max_tokens: 4000,
           messages: [{ role: 'user', content: prompt }]
         })
@@ -63,7 +62,7 @@ async function callClaudeForICP(inputs) {
       const data = await res.json();
 
       try {
-        return JSON.parse(data?.content?.[0]?.text || '{}');
+        return JSON.parse(data?.choices?.[0]?.message?.content || '{}');
       } catch (err) {
         console.error('Error parsing Claude response for variant', variant, err);
         return null;
@@ -132,15 +131,14 @@ async function generateStepContent(currentStep, formData, companyName) {
 
 
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'llama3-70b-8192',
         max_tokens: 1000,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -150,39 +148,34 @@ async function generateStepContent(currentStep, formData, companyName) {
     
 
     
-    if (!data?.content?.[0]?.text) {
-      console.error('No content in Claude response:', data);
-      return { success: false, error: 'No response from Claude' };
+    if (!data?.choices?.[0]?.message?.content) {
+      console.error('No content in Groq response:', data);
+      return { success: false, error: 'No response from Groq' };
     }
 
-    const responseText = data.content[0].text.trim();
+    const responseText = data.choices[0].message.content.trim();
 
+    if (currentStep === 4) {
+      // Step 4 expects a plain string, not JSON
+      return { success: true, suggestions: responseText };
+    }
 
     try {
-      // Try to parse as JSON first
+      // Try to parse as JSON for all other steps
       const suggestions = JSON.parse(responseText);
       return { success: true, suggestions };
     } catch (err) {
-      console.error('JSON parsing failed, trying to extract JSON from text:', err);
-      
-      // Try to extract JSON from the response
+      // Try to extract JSON from the response if possible
       const jsonMatch = responseText.match(/\[.*\]/);
       if (jsonMatch) {
         try {
           const suggestions = JSON.parse(jsonMatch[0]);
           return { success: true, suggestions };
         } catch (extractErr) {
-          console.error('Failed to parse extracted JSON:', extractErr);
+          // ignore
         }
       }
-      
-      // If it's step 4 (differentiation), return the text as a string
-      if (currentStep === 4) {
-        return { success: true, suggestions: responseText };
-      }
-      
-      // For other steps, return empty array as fallback
-  
+      // If parsing fails, return an empty array for non-string steps
       return { success: true, suggestions: [] };
     }
   } catch (error) {
@@ -228,22 +221,21 @@ Return ONLY valid JSON with these exact fields:
 }`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'llama3-70b-8192',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
     const data = await res.json();
-    const responseText = data?.content?.[0]?.text || '{}';
+    const responseText = data?.choices?.[0]?.message?.content || '{}';
     try {
       let parsed = JSON.parse(responseText);
       // Truncate all arrays to 4 items
@@ -300,22 +292,21 @@ Return ONLY valid JSON with these exact fields:
 }`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'llama3-70b-8192',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
     const data = await res.json();
-    const responseText = data?.content?.[0]?.text || '{}';
+    const responseText = data?.choices?.[0]?.message?.content || '{}';
     try {
       let parsed = JSON.parse(responseText);
       // Truncate all arrays to 4 items
@@ -373,22 +364,21 @@ Return ONLY valid JSON with these exact fields:
 }`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'Authorization': `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'llama3-70b-8192',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
     const data = await res.json();
-    const responseText = data?.content?.[0]?.text || '{}';
+    const responseText = data?.choices?.[0]?.message?.content || '{}';
     try {
       let parsed = JSON.parse(responseText);
       // Truncate all arrays to 4 items
@@ -418,3 +408,4 @@ module.exports = {
   generateSegmentDetails,
   generateProductDetails
 };
+

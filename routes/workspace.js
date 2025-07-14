@@ -2,7 +2,7 @@ const express = require("express");
 const Workspace = require("../models/Workspace");
 const auth = require("../middleware/auth");
 const router = express.Router();
-const { callClaudeForICP, generateProductDetails, generatePersonaDetails, generateSegmentDetails } = require('../services/claudeService');
+const { callClaudeForICP, generateProductDetails, generatePersonaDetails, generateSegmentDetails } = require('../services/groqService');
 const slugify = require('slugify');
 
 // Create a new workspace
@@ -317,7 +317,7 @@ router.put('/:slug/icp', auth, async (req, res) => {
   
       await workspace.save();
   
-      // Optionally trigger Claude enrichment after saving ICP
+      // Optionally trigger Groq enrichment after saving ICP
       try {
         const enrichment = await callClaudeForICP({
           companyName: workspace.companyName,
@@ -347,11 +347,11 @@ router.post('/:slug/icp/re-enrich', auth, async (req, res) => {
     try {
       const workspace = await Workspace.findOne({ slug: req.params.slug });
       if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
-  
-      const variants = await callClaudeWithICP(workspace);
+
+      const variants = await callClaudeForICP(workspace);
       workspace.icpEnrichmentVersions = variants;
       await workspace.save();
-  
+
       res.status(200).json({ message: 'Re-enriched successfully', data: variants });
     } catch (err) {
       res.status(500).json({ error: 'Failed to re-enrich' });
