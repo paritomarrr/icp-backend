@@ -3,13 +3,14 @@ const express = require('express');
 const router = express.Router();
 const { generateStepContent, generatePersonaDetails, generateSegmentDetails, generateProductDetails } = require('../services/groqService');
 const auth = require('../middleware/auth');
+const aiSuggestionsController = require('../controllers/aiSuggestionsController');
 
-// Generate suggestions for a specific step
+// Generate suggestions for a specific step or field
 router.post('/generate-suggestions', auth, async (req, res) => {
   try {
-    const { currentStep, formData, companyName } = req.body;
+    const { currentStepOrField, formData, companyName } = req.body;
 
-    const result = await generateStepContent(currentStep, formData, companyName);
+    const result = await generateStepContent(currentStepOrField, formData, companyName);
     
     if (!result.success) {
       return res.status(500).json({ 
@@ -134,5 +135,7 @@ router.post('/generate-product-details', auth, async (req, res) => {
     });
   }
 });
+
+router.post('/ai-suggestions', aiSuggestionsController.getSuggestions);
 
 module.exports = router; 

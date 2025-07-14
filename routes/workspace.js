@@ -7,7 +7,17 @@ const slugify = require('slugify');
 
 // Create a new workspace
 router.post("/", auth, async (req, res) => {
-  const { name, companyName, companyUrl } = req.body;
+  const {
+    name,
+    companyName,
+    companyUrl,
+    admin,
+    productUnderstanding,
+    offerSales,
+    socialProof,
+    targetSegments,
+    previousOutboundExperience
+  } = req.body;
 
   if (!name || !companyName || !companyUrl ) {
     return res.status(400).json({ error: "Missing fields" });
@@ -30,6 +40,20 @@ router.post("/", auth, async (req, res) => {
       companyUrl,
       slug,
       ownerId: req.user.userId,
+      admin: admin || { emailSignatures: [], platformAccess: false, domain: "" },
+      productUnderstanding: productUnderstanding || {
+        valueProposition: [],
+        problemsSolved: [],
+        keyFeatures: [],
+        solutionsOutcomes: [],
+        usps: [],
+        urgency: [],
+        competitorAnalysis: []
+      },
+      offerSales: offerSales || { pricingPackages: [], clientTimelineROI: "", salesDeckUrl: "" },
+      socialProof: socialProof || { caseStudies: [], testimonials: [] },
+      targetSegments: targetSegments || [],
+      previousOutboundExperience: previousOutboundExperience || { successfulEmailsOrDMs: [], coldCallScripts: [] }
     });
 
     res.status(201).json(workspace);
@@ -357,6 +381,49 @@ router.post('/:slug/icp/re-enrich', auth, async (req, res) => {
       res.status(500).json({ error: 'Failed to re-enrich' });
     }
   });
+
+// Update onboarding data for a workspace by slug (new structure)
+router.put('/:slug/onboarding', auth, async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const {
+      admin,
+      productUnderstanding,
+      offerSales,
+      socialProof,
+      targetSegments,
+      previousOutboundExperience
+    } = req.body;
+
+    if (
+      admin === undefined &&
+      productUnderstanding === undefined &&
+      offerSales === undefined &&
+      socialProof === undefined &&
+      targetSegments === undefined &&
+      previousOutboundExperience === undefined
+    ) {
+      return res.status(400).json({ error: 'At least one onboarding field must be provided.' });
+    }
+
+    const workspace = await Workspace.findOne({ slug });
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    if (admin !== undefined) workspace.admin = admin;
+    if (productUnderstanding !== undefined) workspace.productUnderstanding = productUnderstanding;
+    if (offerSales !== undefined) workspace.offerSales = offerSales;
+    if (socialProof !== undefined) workspace.socialProof = socialProof;
+    if (targetSegments !== undefined) workspace.targetSegments = targetSegments;
+    if (previousOutboundExperience !== undefined) workspace.previousOutboundExperience = previousOutboundExperience;
+
+    await workspace.save();
+    res.status(200).json(workspace);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update onboarding', details: err.message });
+  }
+});
   
 // Get all workspaces for the current user
 router.get("/", auth, async (req, res) => {

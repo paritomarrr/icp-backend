@@ -78,58 +78,67 @@ async function callClaudeForICP(inputs) {
   };
 }
 
-// New function for step-by-step content generation
-function generateStepPrompt(currentStep, formData, companyName) {
+// Update fieldPrompts to use companyDomain and all previous fields for context
+const fieldPrompts = {
+  'productUnderstanding.valueProposition': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", suggest 3-5 value propositions for their product(s). Focus on concise, compelling statements (max 50 characters each).\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Value prop 1", "Value prop 2", "Value prop 3"]`,
+  'productUnderstanding.problemsSolved': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}" and value propositions "${Array.isArray(formData.productUnderstanding?.valueProposition) ? formData.productUnderstanding.valueProposition.join(', ') : ''}", suggest 3-5 problems their product(s) solve. Mention both the problems and their root causes.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Problem 1", "Problem 2", "Problem 3"]`,
+  'productUnderstanding.keyFeatures': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", value propositions "${Array.isArray(formData.productUnderstanding?.valueProposition) ? formData.productUnderstanding.valueProposition.join(', ') : ''}", and problems solved "${Array.isArray(formData.productUnderstanding?.problemsSolved) ? formData.productUnderstanding.problemsSolved.join(', ') : ''}", suggest 3-5 key features of their solution.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Feature 1", "Feature 2", "Feature 3"]`,
+  'productUnderstanding.solutionsOutcomes': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", value propositions "${Array.isArray(formData.productUnderstanding?.valueProposition) ? formData.productUnderstanding.valueProposition.join(', ') : ''}", problems solved "${Array.isArray(formData.productUnderstanding?.problemsSolved) ? formData.productUnderstanding.problemsSolved.join(', ') : ''}", and key features "${Array.isArray(formData.productUnderstanding?.keyFeatures) ? formData.productUnderstanding.keyFeatures.join(', ') : ''}", suggest 3-5 business outcomes or solutions their product(s) deliver. Include metrics where possible.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Outcome 1", "Outcome 2", "Outcome 3"]`,
+  'productUnderstanding.usps': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", value propositions "${Array.isArray(formData.productUnderstanding?.valueProposition) ? formData.productUnderstanding.valueProposition.join(', ') : ''}", problems solved "${Array.isArray(formData.productUnderstanding?.problemsSolved) ? formData.productUnderstanding.problemsSolved.join(', ') : ''}", key features "${Array.isArray(formData.productUnderstanding?.keyFeatures) ? formData.productUnderstanding.keyFeatures.join(', ') : ''}", and solutions/outcomes "${Array.isArray(formData.productUnderstanding?.solutionsOutcomes) ? formData.productUnderstanding.solutionsOutcomes.join(', ') : ''}", suggest 3-5 unique selling points (USPs) for their product(s).\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["USP 1", "USP 2", "USP 3"]`,
+  'productUnderstanding.urgency': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", value propositions "${Array.isArray(formData.productUnderstanding?.valueProposition) ? formData.productUnderstanding.valueProposition.join(', ') : ''}", problems solved "${Array.isArray(formData.productUnderstanding?.problemsSolved) ? formData.productUnderstanding.problemsSolved.join(', ') : ''}", key features "${Array.isArray(formData.productUnderstanding?.keyFeatures) ? formData.productUnderstanding.keyFeatures.join(', ') : ''}", solutions/outcomes "${Array.isArray(formData.productUnderstanding?.solutionsOutcomes) ? formData.productUnderstanding.solutionsOutcomes.join(', ') : ''}", and USPs "${Array.isArray(formData.productUnderstanding?.usps) ? formData.productUnderstanding.usps.join(', ') : ''}", suggest 3-5 reasons for urgency ("Why Now") for their prospects.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Urgency 1", "Urgency 2", "Urgency 3"]`,
+  'offerSales.pricingPackages': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", value propositions "${Array.isArray(formData.productUnderstanding?.valueProposition) ? formData.productUnderstanding.valueProposition.join(', ') : ''}", problems solved "${Array.isArray(formData.productUnderstanding?.problemsSolved) ? formData.productUnderstanding.problemsSolved.join(', ') : ''}", key features "${Array.isArray(formData.productUnderstanding?.keyFeatures) ? formData.productUnderstanding.keyFeatures.join(', ') : ''}", and other product understanding fields, suggest 3-5 pricing packages or tiers this company might offer.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Starter", "Pro", "Enterprise"]`,
+  'offerSales.clientTimelineROI': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", value propositions "${Array.isArray(formData.productUnderstanding?.valueProposition) ? formData.productUnderstanding.valueProposition.join(', ') : ''}", problems solved "${Array.isArray(formData.productUnderstanding?.problemsSolved) ? formData.productUnderstanding.problemsSolved.join(', ') : ''}", key features "${Array.isArray(formData.productUnderstanding?.keyFeatures) ? formData.productUnderstanding.keyFeatures.join(', ') : ''}", pricing packages "${Array.isArray(formData.offerSales?.pricingPackages) ? formData.offerSales.pricingPackages.join(', ') : ''}", and other product understanding fields, suggest a compelling client timeline and ROI statement.\n\nIMPORTANT: Return ONLY a single string. No explanation, no markdown, just the string.\n\nExample format: "Clients typically see ROI within 3 months if..."`,
+  'socialProof.caseStudies': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", suggest 3-5 case study examples (real or hypothetical) relevant to their market segments. Return each as a string in the format: 'https://example.com/case-study (Segment)'.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["https://example.com/case-study (Fintech)", "https://example.com/case-study (Healthcare)"]`,
+  'socialProof.testimonials': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", suggest 3-5 notable testimonials (real or hypothetical) for their product or service. Focus on concise, metric-driven statements.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["'We increased revenue by 30% using X.'", "'Customer satisfaction improved by 25%.'"]`,
+  'targetSegments.add': (companyDomain, formData) =>
+    `Based on the company website "${companyDomain}", suggest 3-5 primary market segments this company should target. Focus on concise, industry-relevant segment names (e.g. Fintech, SalesTech, Agencies, Healthcare, Manufacturing, etc.).\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Fintech", "SalesTech", "Agencies"]`,
+};
+
+function generateStepPrompt(currentStepOrField, formData, companyDomain) {
+  if (typeof currentStepOrField === 'string' && fieldPrompts[currentStepOrField]) {
+    return fieldPrompts[currentStepOrField](companyDomain, formData);
+  }
+
+  // Old numeric step logic (fallback)
   const stepPrompts = {
-    1: `Based on the company "${companyName}" and their website "${formData.companyUrl}", suggest 3-5 main products or services they offer. Focus on their core value propositions and what they actually sell. 
-
-IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
-
-Example format: ["Product 1", "Product 2", "Product 3"]`,
-    
-    2: `Based on the company "${companyName}" and their products "${formData.products.join(', ')}", suggest 3-5 target buyer personas. These should be decision-makers who would purchase these products. Include job titles and brief descriptions.
-
-IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
-
-Example format: ["VP of Engineering", "Marketing Director", "Sales Manager"]`,
-    
-    3: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and target personas "${formData.personas.join(', ')}", suggest 3-5 specific use cases or scenarios where customers would use these products.
-
-IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
-
-Example format: ["Use case 1", "Use case 2", "Use case 3"]`,
-    
-    4: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and use cases "${formData.useCases.join(', ')}", write a compelling differentiation statement. What makes this company unique? What's their competitive advantage?
-
-IMPORTANT: Return ONLY a single string. No explanation, no markdown, just the string.
-
-Example format: "Our unique value proposition is..."`,
-    
-    5: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and differentiation "${formData.differentiation}", suggest 3-5 market segments they should target. Consider industry, company size, geography, etc.
-
-IMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.
-
-Example format: ["Segment 1", "Segment 2", "Segment 3"]`,
-    
-    6: `Based on the company "${companyName}", their products "${formData.products.join(', ')}", and market segments "${formData.segments.join(', ')}", suggest 3-5 direct competitors. Include both company names and their websites.
-
-IMPORTANT: Return ONLY a valid JSON array of objects with "name" and "url" properties. No explanation, no markdown, just the JSON array.
-
-Example format: [{"name": "Competitor 1", "url": "https://competitor1.com"}, {"name": "Competitor 2", "url": "https://competitor2.com"}]`
+    1: `Based on the company "${companyDomain}", suggest 3-5 main products or services they offer. Focus on their core value propositions and what they actually sell. \n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Product 1", "Product 2", "Product 3"]`,
+    2: `Based on the company "${companyDomain}", suggest 3-5 target buyer personas. These should be decision-makers who would purchase these products. Include job titles and brief descriptions.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["VP of Engineering", "Marketing Director", "Sales Manager"]`,
+    3: `Based on the company "${companyDomain}", their products "${Array.isArray(formData.products) ? formData.products.join(', ') : ''}", and target personas "${Array.isArray(formData.personas) ? formData.personas.join(', ') : ''}", suggest 3-5 specific use cases or scenarios where customers would use these products.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Use case 1", "Use case 2", "Use case 3"]`,
+    4: `Based on the company "${companyDomain}", their products "${Array.isArray(formData.products) ? formData.products.join(', ') : ''}", and use cases "${Array.isArray(formData.useCases) ? formData.useCases.join(', ') : ''}", write a compelling differentiation statement. What makes this company unique? What's their competitive advantage?\n\nIMPORTANT: Return ONLY a single string. No explanation, no markdown, just the string.\n\nExample format: "Our unique value proposition is..."`,
+    5: `Based on the company "${companyDomain}", their products "${Array.isArray(formData.products) ? formData.products.join(', ') : ''}", and differentiation "${formData.differentiation}", suggest 3-5 market segments they should target. Consider industry, company size, geography, etc.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Segment 1", "Segment 2", "Segment 3"]`,
+    6: `Based on the company "${companyDomain}", their products "${Array.isArray(formData.products) ? formData.products.join(', ') : ''}", and market segments "${Array.isArray(formData.segments) ? formData.segments.join(', ') : ''}", suggest 3-5 direct competitors. Include both company names and their websites.\n\nIMPORTANT: Return ONLY a valid JSON array of objects with "name" and "url" properties. No explanation, no markdown, just the JSON array.\n\nExample format: [{"name": "Competitor 1", "url": "https://competitor1.com"}, {"name": "Competitor 2", "url": "https://competitor2.com"}]`
   };
 
-  return stepPrompts[currentStep] || '';
+  return stepPrompts[currentStepOrField] || '';
 }
 
-async function generateStepContent(currentStep, formData, companyName) {
+async function generateStepContent(currentStepOrField, formData, companyDomain) {
+  // New onboarding field prompts (move to module scope)
+  // const fieldPrompts = {
+  //   'productUnderstanding.valueProposition': `Based on the company "${companyName}" and their website "${formData.companyUrl}", suggest 3-5 value propositions for their product(s). Focus on concise, compelling statements (max 50 characters each).\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Value prop 1", "Value prop 2", "Value prop 3"]`,
+  //   'productUnderstanding.problemsSolved': `Based on the company "${companyName}" and their products "${formData.productUnderstanding?.valueProposition?.join(', ') || ''}", suggest 3-5 problems their product(s) solve. Mention both the problems and their root causes.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Problem 1", "Problem 2", "Problem 3"]`,
+  //   'productUnderstanding.keyFeatures': `Based on the company "${companyName}" and their products "${formData.productUnderstanding?.valueProposition?.join(', ') || ''}", suggest 3-5 key features of their solution.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Feature 1", "Feature 2", "Feature 3"]`,
+  //   'productUnderstanding.solutionsOutcomes': `Based on the company "${companyName}" and their products "${formData.productUnderstanding?.valueProposition?.join(', ') || ''}", suggest 3-5 business outcomes or solutions their product(s) deliver. Include metrics where possible.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Outcome 1", "Outcome 2", "Outcome 3"]`,
+  //   'productUnderstanding.usps': `Based on the company "${companyName}" and their products "${formData.productUnderstanding?.valueProposition?.join(', ') || ''}", suggest 3-5 unique selling points (USPs) for their product(s).\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["USP 1", "USP 2", "USP 3"]`,
+  //   'productUnderstanding.urgency': `Based on the company "${companyName}" and their products "${formData.productUnderstanding?.valueProposition?.join(', ') || ''}", suggest 3-5 reasons for urgency ("Why Now") for their prospects.\n\nIMPORTANT: Return ONLY a valid JSON array of strings. No explanation, no markdown, just the JSON array.\n\nExample format: ["Urgency 1", "Urgency 2", "Urgency 3"]`,
+  // };
+
   try {
-    const prompt = generateStepPrompt(currentStep, formData, companyName);
+    const prompt = generateStepPrompt(currentStepOrField, formData, companyDomain);
     
     if (!prompt) {
-      return { success: false, error: 'Invalid step' };
+      return { success: false, error: 'Invalid step or field' };
     }
-
-
 
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -146,8 +155,6 @@ async function generateStepContent(currentStep, formData, companyName) {
 
     const data = await res.json();
     
-
-    
     if (!data?.choices?.[0]?.message?.content) {
       console.error('No content in Groq response:', data);
       return { success: false, error: 'No response from Groq' };
@@ -155,7 +162,28 @@ async function generateStepContent(currentStep, formData, companyName) {
 
     const responseText = data.choices[0].message.content.trim();
 
-    if (currentStep === 4) {
+    // For new fields, always expect JSON array
+    if (typeof currentStepOrField === 'string' && fieldPrompts[currentStepOrField]) {
+      try {
+        const suggestions = JSON.parse(responseText);
+        return { success: true, suggestions };
+      } catch (err) {
+        // Try to extract JSON from the response if possible
+        const jsonMatch = responseText.match(/\[.*\]/);
+        if (jsonMatch) {
+          try {
+            const suggestions = JSON.parse(jsonMatch[0]);
+            return { success: true, suggestions };
+          } catch (extractErr) {
+            // ignore
+          }
+        }
+        return { success: true, suggestions: [] };
+      }
+    }
+
+    // Old numeric step logic
+    if (currentStepOrField === 4) {
       // Step 4 expects a plain string, not JSON
       return { success: true, suggestions: responseText };
     }

@@ -118,25 +118,92 @@ const WorkspaceSchema = new mongoose.Schema({
   },
   slug: String,
 
-  // Updated to use detailed schemas
-  products: [ProductSchema],
-  personas: [PersonaSchema],
-  segments: [SegmentSchema],
-  
-  // Keep existing simple arrays for backwards compatibility if needed
-  useCases: [String],
-  differentiation: String,
-  competitors: [
+  // New onboarding structure
+  admin: {
+    emailSignatures: [
+      {
+        firstName: String,
+        lastName: String,
+        title: String
+      }
+    ],
+    platformAccess: Boolean,
+    domain: String
+  },
+  productUnderstanding: {
+    valueProposition: [String],
+    problemsSolved: [String],
+    keyFeatures: [String],
+    solutionsOutcomes: [String],
+    usps: [String],
+    urgency: [String],
+    competitorAnalysis: [
+      {
+        domain: String,
+        differentiation: String
+      }
+    ]
+  },
+  offerSales: {
+    pricingPackages: [String],
+    clientTimelineROI: String,
+    salesDeckUrl: String
+  },
+  socialProof: {
+    caseStudies: [
+      {
+        url: String,
+        segment: String
+      }
+    ],
+    testimonials: [String]
+  },
+  targetSegments: [
     {
       name: String,
-      url: String
+      firmographics: {
+        industry: String,
+        employeeCount: String,
+        locations: [String]
+      },
+      signals: [String],
+      qualification: {
+        tier1Criteria: [String],
+        lookalikeCompanyUrls: [String],
+        disqualifyingCriteria: [String]
+      },
+      messaging: {
+        specificBenefits: [String],
+        awarenessLevel: String,
+        ctaOptions: [String]
+      },
+      personas: [
+        {
+          mappedSegment: String,
+          department: String,
+          jobTitles: [String],
+          valueProposition: String,
+          specificCTA: String,
+          responsibilities: [String],
+          okrs: [String],
+          painPoints: [String]
+        }
+      ]
     }
   ],
-  
-  // Keep enrichment versions for migration/backup purposes
-  icpEnrichmentVersions: {
-    type: Map,
-    of: Object // stores { 1: {...}, 2: {...}, ... }
+  previousOutboundExperience: {
+    successfulEmailsOrDMs: [
+      {
+        subjectLine: String,
+        outcome: String
+      }
+    ],
+    coldCallScripts: [
+      {
+        name: String,
+        content: String
+      }
+    ]
   }
 }, {
   timestamps: true
