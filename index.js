@@ -11,9 +11,17 @@ const icpWizardRoutes = require("./routes/icpWizard");
 
 const app = express();
 
-// Enable CORS for frontend origins
+// Enable CORS for frontend origins (configurable via env)
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+      "https://icp-frontend-six.vercel.app",
+      "http://localhost:8080",
+      "http://localhost:5173",
+      "http://localhost:3000"
+    ];
 app.use(cors({
-  origin: ["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"],
+  origin: allowedOrigins,
   credentials: true
 }));
 
