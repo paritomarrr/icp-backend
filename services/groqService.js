@@ -118,6 +118,56 @@ IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, 
 
 Example format: ["Dedicate 2-4 hours per week during first month for setup and training", "Assign a dedicated point person for implementation and ongoing management", "Provide access to existing systems and data for integration", "Commit to using the platform consistently for minimum 3 months"]`,
 
+    // Target Segments field types
+    segmentName: `Based on the domain "${domain}", product description "${cumulativeData.description || ''}", and industry context, suggest exactly 4 potential target account segments that would be good fits for this solution.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Enterprise Manufacturing Companies (500+ employees)", "Mid-Market Healthcare Organizations", "Growing SaaS Companies (Series B+)", "Regional Financial Services Firms"]`,
+
+    segmentIndustry: `Based on the domain "${domain}" and product "${cumulativeData.description || ''}", suggest exactly 4 specific industries that would benefit most from this solution.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Manufacturing & Industrial", "Healthcare & Life Sciences", "Financial Services", "Technology & Software"]`,
+
+    segmentCompanySize: `Based on the domain "${domain}" and product type "${cumulativeData.category || ''}", suggest exactly 4 company size ranges that would be ideal targets for this solution.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["50-200 employees, $10M-$50M revenue", "200-1000 employees, $50M-$200M revenue", "1000+ employees, $200M+ revenue", "Enterprise (5000+ employees, $1B+ revenue)"]`,
+
+    segmentGeography: `Based on the domain "${domain}" and business type, suggest exactly 4 geographic markets that would be good targets for this solution.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["North America (US & Canada)", "Western Europe (UK, Germany, France)", "Asia-Pacific (Australia, Singapore, Japan)", "Global (All English-speaking markets)"]`,
+
+    // Persona field types  
+    personaTitle: `Based on the segment industry "${cumulativeData.segmentIndustry || ''}" and company size "${cumulativeData.segmentCompanySize || ''}", suggest exactly 4 job titles that would be key decision makers or influencers for "${cumulativeData.description || 'this solution'}".
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["VP of Engineering", "IT Director", "Chief Technology Officer", "Head of Operations"]`,
+
+    personaSeniority: `Based on the job title context and industry, suggest exactly 4 seniority levels that would be appropriate for decision makers in this context.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Senior Manager", "Director", "Vice President", "C-Level Executive"]`,
+
+    personaResponsibilities: `Based on the persona title "${cumulativeData.personaTitle || ''}" in "${cumulativeData.segmentIndustry || ''}" industry, suggest exactly 4 primary responsibilities this person would have in their role.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Oversee technology infrastructure and security", "Manage team of 10-15 engineers and developers", "Drive digital transformation initiatives", "Evaluate and implement new software solutions"]`,
+
+    personaChallenges: `Based on the persona title "${cumulativeData.personaTitle || ''}" in "${cumulativeData.segmentIndustry || ''}" industry, suggest exactly 4 key challenges or pain points this person typically faces that "${cumulativeData.description || 'our solution'}" could help solve.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Limited budget for new technology implementations", "Pressure to reduce operational costs while maintaining quality", "Difficulty finding and retaining skilled technical talent", "Need to integrate multiple legacy systems efficiently"]`,
+
     problemsWithRootCauses: `Based on the domain "${domain}", description "${cumulativeData.description || ''}", and value proposition "${cumulativeData.valueProposition || ''}", identify exactly 4 specific problems this company solves, including the root causes of each problem.
 
 IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
@@ -183,7 +233,7 @@ Example format: ["Consequence 1", "Consequence 2", "Consequence 3", "Consequence
     }
 
     // For array fields, try to parse as JSON
-    if (['valuePropositionVariations', 'problemsWithRootCauses', 'keyFeatures', 'businessOutcomes', 'useCases', 'uniqueSellingPoints', 'urgencyConsequences', 'pricingTiers', 'clientTimeline', 'roiRequirements'].includes(fieldType)) {
+    if (['valuePropositionVariations', 'problemsWithRootCauses', 'keyFeatures', 'businessOutcomes', 'useCases', 'uniqueSellingPoints', 'urgencyConsequences', 'pricingTiers', 'clientTimeline', 'roiRequirements', 'segmentName', 'segmentIndustry', 'segmentCompanySize', 'segmentGeography', 'personaTitle', 'personaSeniority', 'personaResponsibilities', 'personaChallenges'].includes(fieldType)) {
       try {
         const parsed = JSON.parse(content);
         return Array.isArray(parsed) ? parsed : [content];
