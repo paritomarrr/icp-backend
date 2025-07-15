@@ -37,9 +37,9 @@ const ProductSchema = new mongoose.Schema({
   urgencyConsequences: [String], // Consequences of not solving problems
   pricing: String,
   pricingTiers: [String], // Different pricing packages
-  clientTimeline: String, // ROI timeline
-  roiRequirements: String, // What's required from client end
-  salesDeckUrl: String,
+  clientTimeline: [String], // ROI timeline entries
+  roiRequirements: [String], // What's required from client end
+  salesDeckUrl: [String], // Array of sales deck URLs
   status: { type: String, enum: ['active', 'draft', 'archived'], default: 'active' },
   priority: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
   createdAt: { type: Date, default: Date.now },

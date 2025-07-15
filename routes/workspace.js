@@ -765,9 +765,9 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
       // Add direct field mappings for single value fields
       enhancedICPForm: {
         productValueProposition: enhancedICPData.product?.valueProposition || '',
-        clientTimeline: enhancedICPData.offerSales?.clientTimeline || '',
-        roiRequirements: enhancedICPData.offerSales?.roiRequirements || '',
-        salesDeckUrl: enhancedICPData.offerSales?.salesDeckUrl || ''
+        clientTimeline: enhancedICPData.offerSales?.clientTimeline || [],
+        roiRequirements: enhancedICPData.offerSales?.roiRequirements || [],
+        salesDeckUrl: enhancedICPData.offerSales?.salesDeckUrl || []
       }
     };
 
@@ -787,9 +787,9 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
           comp && (comp.domain?.trim() || comp.differentiation?.trim())
         ),
         pricingTiers: (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && item.trim()),
-        clientTimeline: enhancedICPData.offerSales?.clientTimeline || '',
-        roiRequirements: enhancedICPData.offerSales?.roiRequirements || '',
-        salesDeckUrl: enhancedICPData.offerSales?.salesDeckUrl || '',
+        clientTimeline: (enhancedICPData.offerSales?.clientTimeline || []).filter(item => item && item.trim()),
+        roiRequirements: (enhancedICPData.offerSales?.roiRequirements || []).filter(item => item && item.trim()),
+        salesDeckUrl: (enhancedICPData.offerSales?.salesDeckUrl || []).filter(item => item && item.trim()),
         updatedAt: new Date()
       };
 
