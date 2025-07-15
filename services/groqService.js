@@ -78,6 +78,131 @@ async function callClaudeForICP(inputs) {
   };
 }
 
+// New function for product field suggestions based on domain and cumulative data
+async function generateProductFieldSuggestions(fieldType, domain, cumulativeData = {}) {
+  const fieldPrompts = {
+    description: `Based on the company domain "${domain}", write a concise 2-3 sentence product description that explains what the company does and their main value proposition. Focus on their core business and target market.
+
+IMPORTANT: Return ONLY the description text. No JSON, no explanation, just the description.`,
+
+    category: `Based on the company domain "${domain}" and description "${cumulativeData.description || ''}", suggest the most appropriate product category. Choose from common categories like: SaaS, Healthcare, Fintech, E-commerce, EdTech, Marketing, Sales, HR, Operations, Security, etc.
+
+IMPORTANT: Return ONLY the category name. No JSON, no explanation, just the category.`,
+
+    valueProposition: `Based on the domain "${domain}", description "${cumulativeData.description || ''}", and category "${cumulativeData.category || ''}", create a compelling value proposition in 40-50 characters. Focus on the main benefit customers get.
+
+IMPORTANT: Return ONLY the value proposition text. No JSON, no explanation, just the text.`,
+
+    valuePropositionVariations: `Based on the domain "${domain}" and main value proposition "${cumulativeData.valueProposition || ''}", suggest exactly 4 alternative value propositions for different market segments or use cases.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Alternative 1", "Alternative 2", "Alternative 3", "Alternative 4"]`,
+
+    // Offer & Sales field types
+    pricingTiers: `Based on the domain "${domain}", product description "${cumulativeData.description || ''}", and value proposition "${cumulativeData.valueProposition || ''}", suggest exactly 4 pricing tiers/packages that would make sense for this business. Include tier name, price point, and key features.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Starter - $99/month - Up to 10 users, basic features", "Professional - $299/month - Up to 50 users, advanced analytics", "Enterprise - $999/month - Unlimited users, custom integrations", "Custom - Contact sales - White-label solution, dedicated support"]`,
+
+    clientTimeline: `Based on the domain "${domain}" and product "${cumulativeData.description || ''}", suggest exactly 4 realistic timeline expectations and ROI metrics that clients typically experience.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Setup completed within 2 weeks with dedicated onboarding", "First results visible within 30 days of implementation", "20-30% efficiency improvement achieved by month 3", "Full ROI typically realized within 6-12 months"]`,
+
+    roiRequirements: `Based on the domain "${domain}" and product "${cumulativeData.description || ''}", suggest exactly 4 key requirements or commitments clients need to make to achieve successful ROI.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Dedicate 2-4 hours per week during first month for setup and training", "Assign a dedicated point person for implementation and ongoing management", "Provide access to existing systems and data for integration", "Commit to using the platform consistently for minimum 3 months"]`,
+
+    problemsWithRootCauses: `Based on the domain "${domain}", description "${cumulativeData.description || ''}", and value proposition "${cumulativeData.valueProposition || ''}", identify exactly 4 specific problems this company solves, including the root causes of each problem.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Problem 1 - Root cause details", "Problem 2 - Root cause details", "Problem 3 - Root cause details", "Problem 4 - Root cause details"]`,
+
+    keyFeatures: `Based on the domain "${domain}", problems solved "${(cumulativeData.problemsWithRootCauses || []).join(', ')}", suggest exactly 4 key product features that would solve these problems.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Feature 1", "Feature 2", "Feature 3", "Feature 4"]`,
+
+    businessOutcomes: `Based on the domain "${domain}", key features "${(cumulativeData.keyFeatures || []).join(', ')}", suggest exactly 4 specific business outcomes with metrics that customers achieve.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["25% increase in efficiency", "50% reduction in processing time", "30% cost savings", "2x faster deployment"]`,
+
+    useCases: `Based on the domain "${domain}", features "${(cumulativeData.keyFeatures || []).join(', ')}", and outcomes "${(cumulativeData.businessOutcomes || []).join(', ')}", suggest exactly 4 specific use cases or scenarios where customers would use this product.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Use case 1", "Use case 2", "Use case 3", "Use case 4"]`,
+
+    uniqueSellingPoints: `Based on the domain "${domain}", features "${(cumulativeData.keyFeatures || []).join(', ')}", and use cases "${(cumulativeData.useCases || []).join(', ')}", suggest exactly 4 unique selling points that differentiate this company from competitors.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["USP 1", "USP 2", "USP 3", "USP 4"]`,
+
+    urgencyConsequences: `Based on the domain "${domain}", problems "${(cumulativeData.problemsWithRootCauses || []).join(', ')}", suggest exactly 4 consequences of NOT solving these problems or delaying implementation.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Consequence 1", "Consequence 2", "Consequence 3", "Consequence 4"]`
+  };
+
+  const prompt = fieldPrompts[fieldType];
+  if (!prompt) {
+    throw new Error(`Unknown field type: ${fieldType}`);
+  }
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'llama3-70b-8192',
+        max_tokens: 1000,
+        temperature: 0.7,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content?.trim();
+
+    if (!content) {
+      throw new Error('No content received from AI');
+    }
+
+    // For array fields, try to parse as JSON
+    if (['valuePropositionVariations', 'problemsWithRootCauses', 'keyFeatures', 'businessOutcomes', 'useCases', 'uniqueSellingPoints', 'urgencyConsequences', 'pricingTiers', 'clientTimeline', 'roiRequirements'].includes(fieldType)) {
+      try {
+        const parsed = JSON.parse(content);
+        return Array.isArray(parsed) ? parsed : [content];
+      } catch (e) {
+        // If JSON parsing fails, return as single item array
+        console.warn(`Failed to parse JSON for ${fieldType}, treating as single item:`, content);
+        return [content];
+      }
+    }
+
+    // For single value fields, return the content directly
+    return content;
+
+  } catch (error) {
+    console.error(`Error generating ${fieldType} suggestions:`, error);
+    throw error;
+  }
+}
+
 // New function for step-by-step content generation
 function generateStepPrompt(currentStep, formData, companyName) {
   const stepPrompts = {
@@ -406,6 +531,7 @@ module.exports = {
   generateStepContent,
   generatePersonaDetails,
   generateSegmentDetails,
-  generateProductDetails
+  generateProductDetails,
+  generateProductFieldSuggestions
 };
 

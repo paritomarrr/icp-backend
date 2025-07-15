@@ -1,9 +1,38 @@
 // routes/icpWizard.js
 const express = require('express');
 const router = express.Router();
-const { generateStepContent, generatePersonaDetails, generateSegmentDetails, generateProductDetails } = require('../services/groqService');
+const { generateStepContent, generatePersonaDetails, generateSegmentDetails, generateProductDetails, generateProductFieldSuggestions } = require('../services/groqService');
 const Workspace = require('../models/Workspace');
 const auth = require('../middleware/auth');
+
+// Generate product field suggestions
+router.post('/generate-product-field-suggestions', auth, async (req, res) => {
+  try {
+    const { fieldType, domain, cumulativeData } = req.body;
+
+    if (!fieldType || !domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Field type and domain are required'
+      });
+    }
+
+    const suggestions = await generateProductFieldSuggestions(fieldType, domain, cumulativeData || {});
+    
+    res.json({
+      success: true,
+      suggestions: suggestions
+    });
+
+  } catch (error) {
+    console.error('Generate product field suggestions error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to generate suggestions',
+      details: error.message
+    });
+  }
+});
 
 // Generate suggestions for a specific step
 router.post('/generate-suggestions', auth, async (req, res) => {
