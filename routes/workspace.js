@@ -309,21 +309,39 @@ router.put('/:slug/icp', auth, async (req, res) => {
       // Update fields - convert simple arrays to detailed objects with enrichment
       workspace.companyUrl = companyUrl;
       workspace.products = await convertToDetailedProducts(products);
-      workspace.personas = await convertToDetailedPersonas(personas);
       workspace.useCases = useCases;
       workspace.differentiation = differentiation;
       workspace.segments = await convertToDetailedSegments(segments);
       workspace.competitors = competitors;
+
+      // Convert personas to nested structure within segments
+      if (personas && personas.length > 0) {
+        const detailedPersonas = await convertToDetailedPersonas(personas);
+        
+        // Distribute personas across segments
+        // For now, put all personas in the first segment if no specific assignment
+        if (workspace.segments.length > 0) {
+          workspace.segments[0].personas = detailedPersonas;
+        }
+      }
   
       await workspace.save();
   
       // Optionally trigger Groq enrichment after saving ICP
       try {
+        // Extract all personas from segments for enrichment
+        const allPersonas = [];
+        workspace.segments.forEach(segment => {
+          if (segment.personas && segment.personas.length > 0) {
+            allPersonas.push(...segment.personas);
+          }
+        });
+
         const enrichment = await callClaudeForICP({
           companyName: workspace.companyName,
           companyUrl: workspace.companyUrl,
           products: workspace.products,
-          personas: workspace.personas,
+          personas: allPersonas,
           useCases: workspace.useCases,
           differentiation: workspace.differentiation,
           segments: workspace.segments,
@@ -501,10 +519,10 @@ router.delete('/:slug/products/:productId', auth, async (req, res) => {
 
 // ==================== PERSONA ROUTES ====================
 
-// Add a new persona to workspace
-router.post('/:slug/personas', auth, async (req, res) => {
+// Add a new persona to a specific segment
+router.post('/:slug/segments/:segmentId/personas', auth, async (req, res) => {
   try {
-    const { slug } = req.params;
+    const { slug, segmentId } = req.params;
     const personaData = req.body;
 
     const workspace = await Workspace.findOne({ slug });
@@ -512,26 +530,64 @@ router.post('/:slug/personas', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    const segment = workspace.segments.id(segmentId);
+    if (!segment) {
+      return res.status(404).json({ error: 'Segment not found' });
+    }
+
     // Add timestamps
     personaData.createdAt = new Date();
     personaData.updatedAt = new Date();
 
-    workspace.personas.push(personaData);
+    if (!segment.personas) {
+      segment.personas = [];
+    }
+    segment.personas.push(personaData);
     await workspace.save();
 
     res.status(201).json({ 
       success: true, 
-      persona: workspace.personas[workspace.personas.length - 1] 
+      persona: segment.personas[segment.personas.length - 1] 
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to add persona', details: error.message });
   }
 });
 
-// Update a persona
-router.put('/:slug/personas/:personaId', auth, async (req, res) => {
+// Get all personas from all segments (for backward compatibility)
+router.get('/:slug/personas', auth, async (req, res) => {
   try {
-    const { slug, personaId } = req.params;
+    const { slug } = req.params;
+
+    const workspace = await Workspace.findOne({ slug });
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Collect all personas from all segments
+    const allPersonas = [];
+    workspace.segments.forEach(segment => {
+      if (segment.personas && segment.personas.length > 0) {
+        segment.personas.forEach(persona => {
+          allPersonas.push({
+            ...persona.toObject(),
+            segmentId: segment._id,
+            segmentName: segment.name
+          });
+        });
+      }
+    });
+
+    res.json({ success: true, personas: allPersonas });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get personas', details: error.message });
+  }
+});
+
+// Update a persona within a segment
+router.put('/:slug/segments/:segmentId/personas/:personaId', auth, async (req, res) => {
+  try {
+    const { slug, segmentId, personaId } = req.params;
     const updateData = req.body;
 
     const workspace = await Workspace.findOne({ slug });
@@ -539,7 +595,12 @@ router.put('/:slug/personas/:personaId', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    const persona = workspace.personas.id(personaId);
+    const segment = workspace.segments.id(segmentId);
+    if (!segment) {
+      return res.status(404).json({ error: 'Segment not found' });
+    }
+
+    const persona = segment.personas.id(personaId);
     if (!persona) {
       return res.status(404).json({ error: 'Persona not found' });
     }
@@ -554,17 +615,22 @@ router.put('/:slug/personas/:personaId', auth, async (req, res) => {
   }
 });
 
-// Delete a persona
-router.delete('/:slug/personas/:personaId', auth, async (req, res) => {
+// Delete a persona from a segment
+router.delete('/:slug/segments/:segmentId/personas/:personaId', auth, async (req, res) => {
   try {
-    const { slug, personaId } = req.params;
+    const { slug, segmentId, personaId } = req.params;
 
     const workspace = await Workspace.findOne({ slug });
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    workspace.personas.id(personaId).remove();
+    const segment = workspace.segments.id(segmentId);
+    if (!segment) {
+      return res.status(404).json({ error: 'Segment not found' });
+    }
+
+    segment.personas.id(personaId).remove();
     await workspace.save();
 
     res.json({ success: true, message: 'Persona deleted successfully' });
@@ -644,6 +710,158 @@ router.delete('/:slug/segments/:segmentId', auth, async (req, res) => {
     res.json({ success: true, message: 'Segment deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete segment', details: error.message });
+  }
+});
+
+// Save enhanced ICP data to workspace
+router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const enhancedICPData = req.body;
+
+    // Debug logging
+    console.log("=== BACKEND ENHANCED ICP DEBUG ===");
+    console.log("Received data keys:", Object.keys(enhancedICPData));
+    console.log("Domain:", enhancedICPData.domain);
+    console.log("Product valueProposition:", enhancedICPData.product?.valueProposition);
+    console.log("OfferSales data:", enhancedICPData.offerSales);
+    console.log("AdminAccess data:", enhancedICPData.adminAccess);
+    console.log("================================");
+
+    // Find the workspace
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workspace not found'
+      });
+    }
+
+    // Check if user owns the workspace
+    if (workspace.ownerId.toString() !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to modify this workspace'
+      });
+    }
+
+    // Transform and save the enhanced ICP data
+    const updateData = {
+      domain: enhancedICPData.domain,
+      adminAccess: enhancedICPData.adminAccess,
+      socialProof: {
+        caseStudies: (enhancedICPData.socialProof?.caseStudies || []).filter(study => 
+          study && (study.url?.trim() || study.title?.trim() || study.description?.trim())
+        ),
+        testimonials: (enhancedICPData.socialProof?.testimonials || []).filter(testimonial => 
+          testimonial && (testimonial.content?.trim() || testimonial.author?.trim())
+        )
+      },
+      outboundExperience: {
+        successfulEmails: (enhancedICPData.outboundExperience?.successfulEmails || []).filter(item => item && item.trim()),
+        successfulCallScripts: (enhancedICPData.outboundExperience?.successfulCallScripts || []).filter(item => item && item.trim())
+      },
+      numberOfSegments: enhancedICPData.numberOfSegments,
+      // Add direct field mappings for single value fields
+      enhancedICPForm: {
+        productValueProposition: enhancedICPData.product?.valueProposition || '',
+        clientTimeline: enhancedICPData.offerSales?.clientTimeline || '',
+        roiRequirements: enhancedICPData.offerSales?.roiRequirements || '',
+        salesDeckUrl: enhancedICPData.offerSales?.salesDeckUrl || ''
+      }
+    };
+
+    // Transform product data to match the enhanced schema
+    if (enhancedICPData.product) {
+      const productData = {
+        name: workspace.companyName || 'Main Product',
+        valueProposition: enhancedICPData.product.valueProposition,
+        // Filter out empty strings from product arrays
+        valuePropositionVariations: (enhancedICPData.product.valuePropositionVariations || []).filter(item => item && item.trim()),
+        problemsWithRootCauses: (enhancedICPData.product.problemsWithRootCauses || []).filter(item => item && item.trim()),
+        keyFeatures: (enhancedICPData.product.keyFeatures || []).filter(item => item && item.trim()),
+        businessOutcomes: (enhancedICPData.product.businessOutcomes || []).filter(item => item && item.trim()),
+        uniqueSellingPoints: (enhancedICPData.product.uniqueSellingPoints || []).filter(item => item && item.trim()),
+        urgencyConsequences: (enhancedICPData.product.urgencyConsequences || []).filter(item => item && item.trim()),
+        competitorAnalysis: (enhancedICPData.product.competitorAnalysis || []).filter(comp => 
+          comp && (comp.domain?.trim() || comp.differentiation?.trim())
+        ),
+        pricingTiers: (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && item.trim()),
+        clientTimeline: enhancedICPData.offerSales?.clientTimeline || '',
+        roiRequirements: enhancedICPData.offerSales?.roiRequirements || '',
+        salesDeckUrl: enhancedICPData.offerSales?.salesDeckUrl || '',
+        updatedAt: new Date()
+      };
+
+      // Update or add the product
+      if (workspace.products && workspace.products.length > 0) {
+        workspace.products[0] = { ...workspace.products[0], ...productData };
+      } else {
+        workspace.products = [productData];
+      }
+    }
+
+    // Update segments data with nested personas
+    if (enhancedICPData.segments && enhancedICPData.segments.length > 0) {
+      workspace.segments = enhancedICPData.segments.map(segment => ({
+        ...segment,
+        // Filter out empty strings from segment arrays
+        locations: (segment.locations || []).filter(item => item && item.trim()),
+        characteristics: (segment.characteristics || []).filter(item => item && item.trim()),
+        industries: (segment.industries || []).filter(item => item && item.trim()),
+        companySizes: (segment.companySizes || []).filter(item => item && item.trim()),
+        technologies: (segment.technologies || []).filter(item => item && item.trim()),
+        qualificationCriteria: (segment.qualificationCriteria || []).filter(item => item && item.trim()),
+        signals: (segment.signals || []).filter(item => item && item.trim()),
+        painPoints: (segment.painPoints || []).filter(item => item && item.trim()),
+        buyingProcesses: (segment.buyingProcesses || []).filter(item => item && item.trim()),
+        specificBenefits: (segment.specificBenefits || []).filter(item => item && item.trim()),
+        ctaOptions: (segment.ctaOptions || []).filter(item => item && item.trim()),
+        personas: segment.personas ? segment.personas.map(persona => ({
+          // Map frontend fields to backend schema
+          name: persona.title || persona.name || 'Unnamed Persona',
+          title: persona.title,
+          seniority: persona.seniority,
+          // Filter out empty strings from persona arrays
+          primaryResponsibilities: (persona.primaryResponsibilities || []).filter(item => item && item.trim()),
+          challenges: (persona.challenges || []).filter(item => item && item.trim()),
+          painPoints: (persona.challenges || []).filter(item => item && item.trim()), // Map challenges to painPoints as well
+          jobTitles: (persona.jobTitles || []).filter(item => item && item.trim()),
+          okrs: (persona.okrs || []).filter(item => item && item.trim()),
+          goals: (persona.goals || []).filter(item => item && item.trim()),
+          responsibilities: (persona.responsibilities || []).filter(item => item && item.trim()),
+          channels: (persona.channels || []).filter(item => item && item.trim()),
+          objections: (persona.objections || []).filter(item => item && item.trim()),
+          triggers: (persona.triggers || []).filter(item => item && item.trim()),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          // Include any other fields that might be present
+          ...persona
+        })).filter(persona => persona.name && persona.name.trim()) : [], // Filter out personas without names
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+    }
+
+    // Apply all updates
+    Object.assign(workspace, updateData);
+    workspace.updatedAt = new Date();
+
+    await workspace.save();
+
+    res.json({
+      success: true,
+      message: 'Enhanced ICP data saved successfully',
+      workspace: workspace
+    });
+
+  } catch (error) {
+    console.error('Save enhanced ICP error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      details: error.message
+    });
   }
 });
 
