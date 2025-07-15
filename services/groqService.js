@@ -168,6 +168,61 @@ IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, 
 
 Example format: ["Limited budget for new technology implementations", "Pressure to reduce operational costs while maintaining quality", "Difficulty finding and retaining skilled technical talent", "Need to integrate multiple legacy systems efficiently"]`,
 
+    personaOKRs: `Based on the persona title "${cumulativeData.personaTitle || ''}" in "${cumulativeData.segmentIndustry || ''}" industry, suggest exactly 4 typical OKRs (Objectives & Key Results) this person would be responsible for.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Increase system uptime to 99.9%", "Reduce security incidents by 50%", "Implement new technology stack within 6 months", "Achieve team satisfaction score of 4.5/5"]`,
+
+    // New Segment field types for Miro structure
+    segmentEmployees: `Based on the domain "${domain}" and industry context, suggest exactly 4 employee count ranges that would be appropriate targets for this solution.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["50-100", "100-500", "500-1000", "1000+"]`,
+
+    segmentLocations: `Based on the domain "${domain}" and target market, suggest exactly 4 key locations or regions where this solution would be most valuable.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["New York, NY", "San Francisco, CA", "London, UK", "Toronto, CA"]`,
+
+    segmentSignals: `Based on the domain "${domain}" and product type, suggest exactly 4 qualifying signals or indicators that would identify good prospects for outreach.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Recent funding announcement", "Job postings for relevant roles", "Technology stack changes", "Expansion into new markets"]`,
+
+    segmentBenefits: `Based on the domain "${domain}" and industry "${cumulativeData.segmentIndustry || ''}", suggest exactly 4 specific benefits or value propositions for this particular segment.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["30% faster implementation for manufacturing environments", "Industry-specific compliance and security features", "Integration with existing ERP systems", "24/7 support with industry expertise"]`,
+
+    segmentCTA: `Based on the domain "${domain}" and target segment, suggest exactly 4 call-to-action options ranked by priority that would appeal to this segment.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Book a personalized demo", "Start free 30-day trial", "Download industry report", "Schedule consultation call"]`,
+
+    segmentTier1Criteria: `Based on the domain "${domain}" and segment context, suggest exactly 4 Tier 1 qualification criteria that would identify the highest-value prospects.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Annual budget above $100K for this category", "Decision maker identified and accessible", "Active evaluation process within 6 months", "Current pain point with existing solution"]`,
+
+    segmentLookalikeURL: `Based on the domain "${domain}" and segment type, suggest a single URL or resource where lookalike companies can be found for this segment.
+
+IMPORTANT: Return ONLY the URL text. No JSON, no explanation, just the URL.
+
+Example format: https://example.com/company-directory`,
+
+    segmentDisqualifying: `Based on the domain "${domain}" and target segment, suggest exactly 4 disqualifying criteria that would indicate a poor fit prospect.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Budget below $50K annually", "No dedicated IT team", "Recent implementation of competing solution", "Not actively looking for solutions in this category"]`,
+
     problemsWithRootCauses: `Based on the domain "${domain}", description "${cumulativeData.description || ''}", and value proposition "${cumulativeData.valueProposition || ''}", identify exactly 4 specific problems this company solves, including the root causes of each problem.
 
 IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
@@ -233,7 +288,7 @@ Example format: ["Consequence 1", "Consequence 2", "Consequence 3", "Consequence
     }
 
     // For array fields, try to parse as JSON
-    if (['valuePropositionVariations', 'problemsWithRootCauses', 'keyFeatures', 'businessOutcomes', 'useCases', 'uniqueSellingPoints', 'urgencyConsequences', 'pricingTiers', 'clientTimeline', 'roiRequirements', 'segmentName', 'segmentIndustry', 'segmentCompanySize', 'segmentGeography', 'personaTitle', 'personaSeniority', 'personaResponsibilities', 'personaChallenges'].includes(fieldType)) {
+    if (['valuePropositionVariations', 'problemsWithRootCauses', 'keyFeatures', 'businessOutcomes', 'useCases', 'uniqueSellingPoints', 'urgencyConsequences', 'pricingTiers', 'clientTimeline', 'roiRequirements', 'segmentName', 'segmentIndustry', 'segmentCompanySize', 'segmentGeography', 'personaTitle', 'personaSeniority', 'personaResponsibilities', 'personaChallenges', 'personaOKRs', 'segmentEmployees', 'segmentLocations', 'segmentSignals', 'segmentBenefits', 'segmentCTA', 'segmentTier1Criteria', 'segmentDisqualifying'].includes(fieldType)) {
       try {
         const parsed = JSON.parse(content);
         return Array.isArray(parsed) ? parsed : [content];

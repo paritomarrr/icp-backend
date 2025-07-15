@@ -66,7 +66,7 @@ const PersonaSchema = new mongoose.Schema({
   goals: [String],
   responsibilities: [String],
   challenges: [String],
-  decisionInfluence: { type: String, enum: ['Decision Maker', 'Champion', 'End User', 'Influencer', 'Gatekeeper'], default: 'Decision Maker' },
+  decisionInfluence: { type: String, enum: ['Decision Maker', 'Champion', 'End User'], default: 'Decision Maker' },
   budget: String,
   teamSize: String,
   channels: [String],
@@ -104,15 +104,26 @@ const SegmentSchema = new mongoose.Schema({
   region: String,
   budget: String,
   focus: String,
+  
+  // Firmographics section (matching Miro structure)
+  firmographics: {
+    industry: String,
+    employees: String, // Employee count/range
+    location: [String], // Multiple locations
+    signals: [String] // Qualifying signals (techographics, structure, social signals)
+  },
+  
+  // Legacy fields for backward compatibility
   industry: String,
   companySize: String,
+  geography: String,
+  
   employeeCount: String, // Enhanced: specific employee count ranges
   idealEmployeeRange: {
     min: Number,
     max: Number
   },
   revenue: String,
-  geography: String,
   locations: [String], // Multiple locations
   employees: String,
   marketSize: String,
@@ -127,26 +138,31 @@ const SegmentSchema = new mongoose.Schema({
   signals: [String], // Qualifying or outreach-relevant signals (techographics, structure, social signals)
   painPoints: [String],
   buyingProcesses: [String],
-  firmographics: [{
-    label: String,
-    value: String
-  }],
   benefits: String,
-  specificBenefits: [String], // Specific USP for this segment
+  specificBenefits: [String], // Specific benefits for this segment (matching Miro)
+  
+  // Awareness level (matching Miro structure)
   awarenessLevel: { 
     type: String, 
     enum: ['Unaware', 'Problem Aware', 'Solution Aware', 'Product Aware', 'Brand Aware'], 
     default: 'Solution Aware' 
   },
+  
+  // CTA Options (matching Miro structure)
   ctaOptions: [String], // CTA options ranked by priority
+  
   priority: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
   status: { type: String, enum: ['active', 'draft', 'archived'], default: 'active' },
+  
+  // Enhanced qualification section (matching Miro structure)
   qualification: {
     tier1Criteria: [String], // Tier 1 qualification criteria
     idealCriteria: [String],
     lookalikeCompanies: [String], // Company URLs for lookalikes
+    lookalikeCompaniesUrl: String, // Single URL field for lookalike companies
     disqualifyingCriteria: [String]
   },
+  
   personas: [PersonaSchema], // Nested personas within each segment
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
