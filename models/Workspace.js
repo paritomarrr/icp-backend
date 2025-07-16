@@ -1,43 +1,72 @@
 const mongoose = require('mongoose');
 
-// Schema for detailed product information
+// Enhanced schema for admin and access information
+const AdminAccessSchema = new mongoose.Schema({
+  emailSignatures: [{
+    firstName: String,
+    lastName: String,
+    title: String
+  }],
+  platformAccessGranted: { type: Boolean, default: false }
+});
+
+// Enhanced schema for detailed product information
 const ProductSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: String,
   category: String,
   targetAudience: String,
   valueProposition: String,
+  valuePropositionVariations: [String], // For different offerings
   problems: [String],
+  problemsWithRootCauses: [String], // Enhanced: problems with root causes
   features: [String],
+  keyFeatures: [String], // Most noteworthy features
   benefits: [String],
+  businessOutcomes: [String], // Business outcomes with metrics
   useCases: [String],
   competitors: [String],
+  competitorAnalysis: [{
+    domain: String,
+    differentiation: String
+  }],
   uniqueSellingPoints: [String],
   usps: [String], // Keep for backwards compatibility
   solution: String,
   whyNow: [String],
+  urgencyConsequences: [String], // Consequences of not solving problems
   pricing: String,
+  pricingTiers: [String], // Different pricing packages
+  clientTimeline: [String], // ROI timeline entries
+  roiRequirements: [String], // What's required from client end
+  salesDeckUrl: [String], // Array of sales deck URLs
   status: { type: String, enum: ['active', 'draft', 'archived'], default: 'active' },
   priority: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Schema for detailed persona information
+// Enhanced schema for detailed persona information
 const PersonaSchema = new mongoose.Schema({
   name: { type: String, required: true },
   title: String,
+  jobTitles: [String], // Multiple job titles for the persona
   department: String,
   seniority: String,
   industry: String,
   company: String,
   location: String,
   description: String,
+  mappedSegment: String, // Which segment this persona belongs to
+  valueProposition: String, // Role-specific value proposition
+  specificCTA: String, // Specific call-to-action for this persona
+  primaryResponsibilities: [String], // Core duties within the company
+  okrs: [String], // Objectives and key results they're responsible for
   painPoints: [String],
   goals: [String],
   responsibilities: [String],
   challenges: [String],
-  decisionInfluence: { type: String, enum: ['Decision Maker', 'Influencer', 'User', 'Gatekeeper'], default: 'Decision Maker' },
+  decisionInfluence: { type: String, enum: ['Decision Maker', 'Champion', 'End User'], default: 'Decision Maker' },
   budget: String,
   teamSize: String,
   channels: [String],
@@ -67,7 +96,7 @@ const PersonaSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Schema for detailed segment information
+// Enhanced schema for detailed segment information
 const SegmentSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: String,
@@ -75,10 +104,27 @@ const SegmentSchema = new mongoose.Schema({
   region: String,
   budget: String,
   focus: String,
+  
+  // Firmographics section (matching Miro structure)
+  firmographics: {
+    industry: String,
+    employees: String, // Employee count/range
+    location: [String], // Multiple locations
+    signals: [String] // Qualifying signals (techographics, structure, social signals)
+  },
+  
+  // Legacy fields for backward compatibility
   industry: String,
   companySize: String,
-  revenue: String,
   geography: String,
+  
+  employeeCount: String, // Enhanced: specific employee count ranges
+  idealEmployeeRange: {
+    min: Number,
+    max: Number
+  },
+  revenue: String,
+  locations: [String], // Multiple locations
   employees: String,
   marketSize: String,
   growthRate: String,
@@ -89,39 +135,82 @@ const SegmentSchema = new mongoose.Schema({
   companySizes: [String],
   technologies: [String],
   qualificationCriteria: [String],
+  signals: [String], // Qualifying or outreach-relevant signals (techographics, structure, social signals)
   painPoints: [String],
   buyingProcesses: [String],
-  firmographics: [{
-    label: String,
-    value: String
-  }],
   benefits: String,
-  awarenessLevel: { type: String, enum: ['Problem', 'Solution', 'Product', 'Brand'], default: 'Solution' },
+  specificBenefits: [String], // Specific benefits for this segment (matching Miro)
+  
+  // Awareness level (matching Miro structure)
+  awarenessLevel: { 
+    type: String, 
+    enum: ['Unaware', 'Problem Aware', 'Solution Aware', 'Product Aware', 'Brand Aware'], 
+    default: 'Solution Aware' 
+  },
+  
+  // CTA Options (matching Miro structure)
+  ctaOptions: [String], // CTA options ranked by priority
+  
   priority: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
   status: { type: String, enum: ['active', 'draft', 'archived'], default: 'active' },
+  
+  // Enhanced qualification section (matching Miro structure)
   qualification: {
+    tier1Criteria: [String], // Tier 1 qualification criteria
     idealCriteria: [String],
-    lookalikeCompanies: [String],
+    lookalikeCompanies: [String], // Company URLs for lookalikes
+    lookalikeCompaniesUrl: String, // Single URL field for lookalike companies
     disqualifyingCriteria: [String]
   },
+  
+  personas: [PersonaSchema], // Nested personas within each segment
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+});
+
+// Schema for social proof
+const SocialProofSchema = new mongoose.Schema({
+  caseStudies: [{
+    url: String,
+    marketSegment: String,
+    title: String,
+    description: String
+  }],
+  testimonials: [{
+    content: String,
+    author: String,
+    company: String,
+    metrics: String,
+    title: String
+  }]
+});
+
+// Schema for outbound experience
+const OutboundExperienceSchema = new mongoose.Schema({
+  successfulEmails: [String], // Outbound emails/DMs that performed well
+  successfulCallScripts: [String] // Cold call scripts that worked well
 });
 
 const WorkspaceSchema = new mongoose.Schema({
   name: String,
   companyName: String,
   companyUrl: String,
+  domain: String, // Company domain
   ownerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
   slug: String,
 
+  // New enhanced sections
+  adminAccess: AdminAccessSchema,
+  socialProof: SocialProofSchema,
+  outboundExperience: OutboundExperienceSchema,
+  numberOfSegments: { type: Number, default: 1 }, // How many segments to target
+
   // Updated to use detailed schemas
   products: [ProductSchema],
-  personas: [PersonaSchema],
-  segments: [SegmentSchema],
+  segments: [SegmentSchema], // Segments now contain nested personas
   
   // Keep existing simple arrays for backwards compatibility if needed
   useCases: [String],
