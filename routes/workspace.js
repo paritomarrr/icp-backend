@@ -745,10 +745,31 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
       });
     }
 
-    // Transform and save the enhanced ICP data
+    // Transform and save the enhanced ICP data to match new schema
     const updateData = {
       domain: enhancedICPData.domain,
       adminAccess: enhancedICPData.adminAccess,
+      product: {
+        valueProposition: enhancedICPData.product?.valueProposition || '',
+        valuePropositionVariations: (enhancedICPData.product?.valuePropositionVariations || []).filter(item => item && item.trim()),
+        problemsWithRootCauses: (enhancedICPData.product?.problemsWithRootCauses || []).filter(item => item && item.trim()),
+        keyFeatures: (enhancedICPData.product?.keyFeatures || []).filter(item => item && item.trim()),
+        businessOutcomes: (enhancedICPData.product?.businessOutcomes || []).filter(item => item && item.trim()),
+        uniqueSellingPoints: (enhancedICPData.product?.uniqueSellingPoints || []).filter(item => item && item.trim()),
+        urgencyConsequences: (enhancedICPData.product?.urgencyConsequences || []).filter(item => item && item.trim()),
+        competitorAnalysis: (enhancedICPData.product?.competitorAnalysis || []).filter(comp => 
+          comp && (comp.domain?.trim() || comp.differentiation?.trim())
+        ),
+        useCases: (enhancedICPData.product?.useCases || []).filter(item => item && item.trim()),
+        description: enhancedICPData.product?.description || '',
+        category: enhancedICPData.product?.category || ''
+      },
+      offerSales: {
+        pricingTiers: (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && item.trim()),
+        clientTimeline: (enhancedICPData.offerSales?.clientTimeline || []).filter(item => item && item.trim()),
+        roiRequirements: (enhancedICPData.offerSales?.roiRequirements || []).filter(item => item && item.trim()),
+        salesDeckUrl: (enhancedICPData.offerSales?.salesDeckUrl || []).filter(item => item && item.trim())
+      },
       socialProof: {
         caseStudies: (enhancedICPData.socialProof?.caseStudies || []).filter(study => 
           study && (study.url?.trim() || study.title?.trim() || study.description?.trim())
@@ -761,91 +782,52 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
         successfulEmails: (enhancedICPData.outboundExperience?.successfulEmails || []).filter(item => item && item.trim()),
         successfulCallScripts: (enhancedICPData.outboundExperience?.successfulCallScripts || []).filter(item => item && item.trim())
       },
-      numberOfSegments: enhancedICPData.numberOfSegments,
-      // Add direct field mappings for single value fields
-      enhancedICPForm: {
-        productValueProposition: enhancedICPData.product?.valueProposition || '',
-        clientTimeline: enhancedICPData.offerSales?.clientTimeline || [],
-        roiRequirements: enhancedICPData.offerSales?.roiRequirements || [],
-        salesDeckUrl: enhancedICPData.offerSales?.salesDeckUrl || []
-      }
+      numberOfSegments: enhancedICPData.numberOfSegments
     };
 
-    // Transform product data to match the enhanced schema
-    if (enhancedICPData.product) {
-      const productData = {
-        name: workspace.companyName || 'Main Product',
-        valueProposition: enhancedICPData.product.valueProposition,
-        // Filter out empty strings from product arrays
-        valuePropositionVariations: (enhancedICPData.product.valuePropositionVariations || []).filter(item => item && item.trim()),
-        problemsWithRootCauses: (enhancedICPData.product.problemsWithRootCauses || []).filter(item => item && item.trim()),
-        keyFeatures: (enhancedICPData.product.keyFeatures || []).filter(item => item && item.trim()),
-        businessOutcomes: (enhancedICPData.product.businessOutcomes || []).filter(item => item && item.trim()),
-        uniqueSellingPoints: (enhancedICPData.product.uniqueSellingPoints || []).filter(item => item && item.trim()),
-        urgencyConsequences: (enhancedICPData.product.urgencyConsequences || []).filter(item => item && item.trim()),
-        competitorAnalysis: (enhancedICPData.product.competitorAnalysis || []).filter(comp => 
-          comp && (comp.domain?.trim() || comp.differentiation?.trim())
-        ),
-        pricingTiers: (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && item.trim()),
-        clientTimeline: (enhancedICPData.offerSales?.clientTimeline || []).filter(item => item && item.trim()),
-        roiRequirements: (enhancedICPData.offerSales?.roiRequirements || []).filter(item => item && item.trim()),
-        salesDeckUrl: (enhancedICPData.offerSales?.salesDeckUrl || []).filter(item => item && item.trim()),
-        updatedAt: new Date()
-      };
-
-      // Update or add the product
-      if (workspace.products && workspace.products.length > 0) {
-        workspace.products[0] = { ...workspace.products[0], ...productData };
-      } else {
-        workspace.products = [productData];
-      }
+    // Handle segments data with nested personas  
+    if (enhancedICPData.segments && enhancedICPData.segments.length > 0) {
+      updateData.segments = enhancedICPData.segments.map(segment => ({
+        name: segment.name,
+        industry: segment.industry,
+        companySize: segment.companySize,
+        geography: segment.geography,
+        awarenessLevel: segment.awarenessLevel || '',
+        personas: segment.personas ? segment.personas.map(persona => ({
+          title: Array.isArray(persona.title) ? persona.title.filter(t => typeof t === 'string' && t.trim()) : [],
+          seniority: persona.seniority,
+          department: Array.isArray(persona.department) ? persona.department.filter(d => typeof d === 'string' && d.trim()) : [],
+          decisionInfluence: persona.decisionInfluence,
+          primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && item.trim()) : [],
+          okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && item.trim()) : [],
+          challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && item.trim()) : [],
+          painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && item.trim()) : [],
+          goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && item.trim()) : [],
+          valueProposition: Array.isArray(persona.valueProposition) ? persona.valueProposition.filter(v => typeof v === 'string' && v.trim()) : [],
+          specificCTA: Array.isArray(persona.specificCTA) ? persona.specificCTA.filter(c => typeof c === 'string' && c.trim()) : []
+        })).filter(persona => Array.isArray(persona.title) && persona.title.length > 0) : []
+      }));
     }
 
-    // Update segments data with nested personas
-    if (enhancedICPData.segments && enhancedICPData.segments.length > 0) {
-      workspace.segments = enhancedICPData.segments.map(segment => ({
-        ...segment,
-        // Filter out empty strings from segment arrays
-        locations: (segment.locations || []).filter(item => item && item.trim()),
-        characteristics: (segment.characteristics || []).filter(item => item && item.trim()),
-        industries: (segment.industries || []).filter(item => item && item.trim()),
-        companySizes: (segment.companySizes || []).filter(item => item && item.trim()),
-        technologies: (segment.technologies || []).filter(item => item && item.trim()),
-        qualificationCriteria: (segment.qualificationCriteria || []).filter(item => item && item.trim()),
-        signals: (segment.signals || []).filter(item => item && item.trim()),
-        painPoints: (segment.painPoints || []).filter(item => item && item.trim()),
-        buyingProcesses: (segment.buyingProcesses || []).filter(item => item && item.trim()),
-        specificBenefits: (segment.specificBenefits || []).filter(item => item && item.trim()),
-        ctaOptions: (segment.ctaOptions || []).filter(item => item && item.trim()),
-        personas: segment.personas ? segment.personas.map(persona => ({
-          // Map frontend fields to backend schema
-          name: persona.title || persona.name || 'Unnamed Persona',
-          title: persona.title,
-          seniority: persona.seniority,
-          // Filter out empty strings from persona arrays
-          primaryResponsibilities: (persona.primaryResponsibilities || []).filter(item => item && item.trim()),
-          challenges: (persona.challenges || []).filter(item => item && item.trim()),
-          painPoints: (persona.challenges || []).filter(item => item && item.trim()), // Map challenges to painPoints as well
-          jobTitles: (persona.jobTitles || []).filter(item => item && item.trim()),
-          okrs: (persona.okrs || []).filter(item => item && item.trim()),
-          goals: (persona.goals || []).filter(item => item && item.trim()),
-          responsibilities: (persona.responsibilities || []).filter(item => item && item.trim()),
-          channels: (persona.channels || []).filter(item => item && item.trim()),
-          objections: (persona.objections || []).filter(item => item && item.trim()),
-          triggers: (persona.triggers || []).filter(item => item && item.trim()),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          // Include any other fields that might be present
-          ...persona
-        })).filter(persona => persona.name && persona.name.trim()) : [], // Filter out personas without names
-        createdAt: new Date(),
-        updatedAt: new Date()
+    // Handle top-level personas array
+    if (enhancedICPData.personas && enhancedICPData.personas.length > 0) {
+      updateData.personas = enhancedICPData.personas.map(persona => ({
+        title: Array.isArray(persona.title) ? persona.title.filter(t => typeof t === 'string' && t.trim()) : [],
+        seniority: persona.seniority,
+        department: Array.isArray(persona.department) ? persona.department.filter(d => typeof d === 'string' && d.trim()) : [],
+        decisionInfluence: persona.decisionInfluence,
+        primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && item.trim()) : [],
+        okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && item.trim()) : [],
+        challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && item.trim()) : [],
+        painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && item.trim()) : [],
+        goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && item.trim()) : [],
+        valueProposition: Array.isArray(persona.valueProposition) ? persona.valueProposition.filter(v => typeof v === 'string' && v.trim()) : [],
+        specificCTA: Array.isArray(persona.specificCTA) ? persona.specificCTA.filter(c => typeof c === 'string' && c.trim()) : []
       }));
     }
 
     // Apply all updates
     Object.assign(workspace, updateData);
-    workspace.updatedAt = new Date();
 
     await workspace.save();
 

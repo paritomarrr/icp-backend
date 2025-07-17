@@ -81,6 +81,24 @@ async function callClaudeForICP(inputs) {
 // New function for product field suggestions based on domain and cumulative data
 async function generateProductFieldSuggestions(fieldType, domain, cumulativeData = {}) {
   const fieldPrompts = {
+    // Persona additional array fields
+    personaDepartment: `Based on the persona title "${cumulativeData.personaTitle || ''}" and segment industry "${cumulativeData.segmentIndustry || ''}", suggest exactly 4 department names this persona might belong to.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Engineering", "Product", "IT", "Operations"]`,
+
+    personaValueProp: `Based on the persona title "${cumulativeData.personaTitle || ''}", segment industry "${cumulativeData.segmentIndustry || ''}", and product value proposition "${cumulativeData.valueProposition || ''}", suggest exactly 4 value propositions tailored for this persona.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Increase team efficiency", "Reduce operational costs", "Improve product quality", "Accelerate innovation"]`,
+
+    personaCTA: `Based on the persona title "${cumulativeData.personaTitle || ''}", segment industry "${cumulativeData.segmentIndustry || ''}", and product context, suggest exactly 4 specific calls to action that would appeal to this persona.
+
+IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, no markdown, just the JSON array.
+
+Example format: ["Request a demo", "Download whitepaper", "Join webinar", "Start free trial"]`,
     description: `Based on the company domain "${domain}", write a concise 2-3 sentence product description that explains what the company does and their main value proposition. Focus on their core business and target market.
 
 IMPORTANT: Return ONLY the description text. No JSON, no explanation, just the description.`,
