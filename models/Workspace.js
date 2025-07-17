@@ -104,8 +104,8 @@ const WorkspaceSchema = new mongoose.Schema({
   offerSales: OfferSalesSchema,
   socialProof: SocialProofSchema,
   numberOfSegments: { type: Number, default: 1 },
-  segments: [SegmentSchema], // Renamed from targetAccountSegments to segments
-  personas: [PersonaSchema], // Top-level personas array
+  segments: [SegmentSchema], 
+  personas: [PersonaSchema],
   outboundExperience: OutboundExperienceSchema
 }, {
   timestamps: true
