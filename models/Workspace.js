@@ -33,7 +33,11 @@ const ProductSchema = new mongoose.Schema({
   }],
   useCases: [String],
   description: String,
-  category: String
+  category: String,
+  pricingTiers: [String], // Added field
+  clientTimeline: [String], // Added field
+  roiRequirements: [String], // Added field
+  salesDeckUrl: [String] // Added field
 });
 
 // Enhanced schema for detailed persona information
@@ -49,7 +53,9 @@ const PersonaSchema = new mongoose.Schema({
   painPoints: [String],
   goals: [String],
   valueProposition: [String],
-  specificCTA: [String]
+  specificCTA: [String],
+  description: String, // Added field
+  category: String // Added field
 });
 
 // Enhanced schema for detailed segment information
@@ -80,13 +86,15 @@ const SocialProofSchema = new mongoose.Schema({
     company: String,
     metrics: String,
     title: String
-  }]
+  }],
+  metrics: String // Added field
 });
 
 // Schema for outbound experience
 const OutboundExperienceSchema = new mongoose.Schema({
-  successfulEmails: [String], // Outbound emails/DMs that performed well
-  successfulCallScripts: [String] // Cold call scripts that worked well
+  successfulEmails: [String],
+  successfulCallScripts: [String],
+  outreachPerformance: String // Added field
 });
 
 const WorkspaceSchema = new mongoose.Schema({
@@ -96,17 +104,18 @@ const WorkspaceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  
-  // Enhanced ICP Data Structure
   domain: String,
+  companyDescription: String, // Added field
+  companyValueAndMissionSummary: String, // Added field
   adminAccess: AdminAccessSchema,
   product: ProductSchema,
   offerSales: OfferSalesSchema,
   socialProof: SocialProofSchema,
   numberOfSegments: { type: Number, default: 1 },
-  segments: [SegmentSchema], 
+  segments: [SegmentSchema],
   personas: [PersonaSchema],
-  outboundExperience: OutboundExperienceSchema
+  outboundExperience: OutboundExperienceSchema,
+  enrichmentVersions: [String] // Added field
 }, {
   timestamps: true
 });

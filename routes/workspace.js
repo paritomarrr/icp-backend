@@ -190,28 +190,12 @@ router.put('/:slug/icp', auth, async (req, res) => {
             const enrichmentResult = await generatePersonaDetails(name, companyData);
             if (enrichmentResult.success && enrichmentResult.data) {
               const enrichedData = enrichmentResult.data;
-              
-              // Update persona with enriched data
               persona.painPoints = enrichedData.painPoints || persona.painPoints;
               persona.goals = enrichedData.goals || persona.goals;
               persona.responsibilities = enrichedData.responsibilities || persona.responsibilities;
               persona.challenges = enrichedData.challenges || persona.challenges;
               persona.channels = enrichedData.channels || persona.channels;
               persona.objections = enrichedData.objections || persona.objections;
-              
-              if (enrichedData.demographics) {
-                persona.demographics = {
-                  ...persona.demographics,
-                  ...enrichedData.demographics
-                };
-              }
-              
-              if (enrichedData.buyingBehavior) {
-                persona.buyingBehavior = {
-                  ...persona.buyingBehavior,
-                  ...enrichedData.buyingBehavior
-                };
-              }
             }
           } catch (error) {
             console.error(`Failed to enrich persona ${name}:`, error);
