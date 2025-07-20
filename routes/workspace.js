@@ -2,8 +2,14 @@ const express = require("express");
 const Workspace = require("../models/Workspace");
 const auth = require("../middleware/auth");
 const router = express.Router();
-const { callClaudeForICP, generateProductDetails, generatePersonaDetails, generateSegmentDetails } = require('../services/groqService');
+const { callClaudeForICP, generateProductDetails, generatePersonaDetails, generateSegmentDetails, refineUserInput, refineComplexObject } = require('../services/groqService');
 const slugify = require('slugify');
+
+// Helper function to safely filter string arrays
+const filterStringArray = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(item => item && typeof item === 'string' && item.trim());
+};
 
 // Create a new workspace
 router.post("/", auth, async (req, res) => {
@@ -290,11 +296,27 @@ router.put('/:slug/icp', auth, async (req, res) => {
         return detailedSegments;
       };
 
+      // Refine user input before processing
+      const context = {
+        companyName: workspace.companyName,
+        domain: companyUrl
+      };
+
+      // Refine differentiation statement
+      const refinedDifferentiation = differentiation ? 
+        await refineUserInput('differentiation', differentiation, context) : 
+        { success: true, data: differentiation };
+
+      // Refine use cases
+      const refinedUseCases = useCases && useCases.length > 0 ? 
+        await refineUserInput('batchTextArray', useCases, { ...context, itemType: 'useCases' }) : 
+        { success: true, data: useCases };
+
       // Update fields - convert simple arrays to detailed objects with enrichment
       workspace.companyUrl = companyUrl;
       workspace.products = await convertToDetailedProducts(products);
-      workspace.useCases = useCases;
-      workspace.differentiation = differentiation;
+      workspace.useCases = refinedUseCases.success ? refinedUseCases.data : useCases;
+      workspace.differentiation = refinedDifferentiation.success ? refinedDifferentiation.data : differentiation;
       workspace.segments = await convertToDetailedSegments(segments);
       workspace.competitors = competitors;
 
@@ -440,11 +462,21 @@ router.post('/:slug/products', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    // Add timestamps
-    productData.createdAt = new Date();
-    productData.updatedAt = new Date();
+    // Refine user input before saving
+    const context = {
+      companyName: workspace.companyName,
+      domain: workspace.companyUrl,
+      companyType: workspace.companyType
+    };
 
-    workspace.products.push(productData);
+    const refinedProduct = await refineComplexObject('product', productData, context);
+    const finalProductData = refinedProduct.success ? refinedProduct.data : productData;
+
+    // Add timestamps
+    finalProductData.createdAt = new Date();
+    finalProductData.updatedAt = new Date();
+
+    workspace.products.push(finalProductData);
     await workspace.save();
 
     res.status(201).json({ 
@@ -472,8 +504,19 @@ router.put('/:slug/products/:productId', auth, async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
+    // Refine user input before updating
+    const context = {
+      companyName: workspace.companyName,
+      domain: workspace.companyUrl,
+      companyType: workspace.companyType,
+      productName: product.name
+    };
+
+    const refinedUpdate = await refineComplexObject('product', updateData, context);
+    const finalUpdateData = refinedUpdate.success ? refinedUpdate.data : updateData;
+
     // Update fields
-    Object.assign(product, updateData, { updatedAt: new Date() });
+    Object.assign(product, finalUpdateData, { updatedAt: new Date() });
     await workspace.save();
 
     res.json({ success: true, product });
@@ -519,14 +562,26 @@ router.post('/:slug/segments/:segmentId/personas', auth, async (req, res) => {
       return res.status(404).json({ error: 'Segment not found' });
     }
 
+    // Refine user input before saving
+    const context = {
+      companyName: workspace.companyName,
+      domain: workspace.companyUrl,
+      industry: segment.industry,
+      companySize: segment.companySize,
+      segmentName: segment.name
+    };
+
+    const refinedPersona = await refineComplexObject('persona', personaData, context);
+    const finalPersonaData = refinedPersona.success ? refinedPersona.data : personaData;
+
     // Add timestamps
-    personaData.createdAt = new Date();
-    personaData.updatedAt = new Date();
+    finalPersonaData.createdAt = new Date();
+    finalPersonaData.updatedAt = new Date();
 
     if (!segment.personas) {
       segment.personas = [];
     }
-    segment.personas.push(personaData);
+    segment.personas.push(finalPersonaData);
     await workspace.save();
 
     res.status(201).json({ 
@@ -589,8 +644,21 @@ router.put('/:slug/segments/:segmentId/personas/:personaId', auth, async (req, r
       return res.status(404).json({ error: 'Persona not found' });
     }
 
+    // Refine user input before updating
+    const context = {
+      companyName: workspace.companyName,
+      domain: workspace.companyUrl,
+      industry: segment.industry,
+      companySize: segment.companySize,
+      segmentName: segment.name,
+      personaTitle: persona.title || persona.name
+    };
+
+    const refinedUpdate = await refineComplexObject('persona', updateData, context);
+    const finalUpdateData = refinedUpdate.success ? refinedUpdate.data : updateData;
+
     // Update fields
-    Object.assign(persona, updateData, { updatedAt: new Date() });
+    Object.assign(persona, finalUpdateData, { updatedAt: new Date() });
     await workspace.save();
 
     res.json({ success: true, persona });
@@ -636,11 +704,21 @@ router.post('/:slug/segments', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    // Add timestamps
-    segmentData.createdAt = new Date();
-    segmentData.updatedAt = new Date();
+    // Refine user input before saving
+    const context = {
+      companyName: workspace.companyName,
+      domain: workspace.companyUrl,
+      industry: segmentData.industry
+    };
 
-    workspace.segments.push(segmentData);
+    const refinedSegment = await refineComplexObject('segment', segmentData, context);
+    const finalSegmentData = refinedSegment.success ? refinedSegment.data : segmentData;
+
+    // Add timestamps
+    finalSegmentData.createdAt = new Date();
+    finalSegmentData.updatedAt = new Date();
+
+    workspace.segments.push(finalSegmentData);
     await workspace.save();
 
     res.status(201).json({ 
@@ -668,8 +746,19 @@ router.put('/:slug/segments/:segmentId', auth, async (req, res) => {
       return res.status(404).json({ error: 'Segment not found' });
     }
 
+    // Refine user input before updating
+    const context = {
+      companyName: workspace.companyName,
+      domain: workspace.companyUrl,
+      industry: segment.industry || updateData.industry,
+      segmentName: segment.name
+    };
+
+    const refinedUpdate = await refineComplexObject('segment', updateData, context);
+    const finalUpdateData = refinedUpdate.success ? refinedUpdate.data : updateData;
+
     // Update fields
-    Object.assign(segment, updateData, { updatedAt: new Date() });
+    Object.assign(segment, finalUpdateData, { updatedAt: new Date() });
     await workspace.save();
 
     res.json({ success: true, segment });
@@ -729,30 +818,63 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
       });
     }
 
+    // Refine critical text fields before saving
+    const context = {
+      companyName: workspace.companyName,
+      domain: enhancedICPData.domain,
+      productName: workspace.products?.[0]?.name
+    };
+
+    // Refine key single text fields
+    const refinedValueProp = enhancedICPData.product?.valueProposition ? 
+      await refineUserInput('valueProposition', enhancedICPData.product.valueProposition, context) : 
+      { success: true, data: '' };
+
+    const refinedDescription = enhancedICPData.product?.description ? 
+      await refineUserInput('productDescription', enhancedICPData.product.description, context) : 
+      { success: true, data: '' };
+
+    // Refine array fields
+    const refinedValuePropVariations = enhancedICPData.product?.valuePropositionVariations?.length > 0 ? 
+      await refineUserInput('batchTextArray', enhancedICPData.product.valuePropositionVariations, { ...context, itemType: 'valuePropositionVariations' }) : 
+      { success: true, data: [] };
+
+    const refinedProblems = enhancedICPData.product?.problemsWithRootCauses?.length > 0 ? 
+      await refineUserInput('batchTextArray', enhancedICPData.product.problemsWithRootCauses, { ...context, itemType: 'problemsWithRootCauses' }) : 
+      { success: true, data: [] };
+
+    const refinedFeatures = enhancedICPData.product?.keyFeatures?.length > 0 ? 
+      await refineUserInput('batchTextArray', enhancedICPData.product.keyFeatures, { ...context, itemType: 'keyFeatures' }) : 
+      { success: true, data: [] };
+
+    const refinedUSPs = enhancedICPData.product?.uniqueSellingPoints?.length > 0 ? 
+      await refineUserInput('batchTextArray', enhancedICPData.product.uniqueSellingPoints, { ...context, itemType: 'uniqueSellingPoints' }) : 
+      { success: true, data: [] };
+
     // Transform and save the enhanced ICP data to match new schema
     const updateData = {
       domain: enhancedICPData.domain,
       adminAccess: enhancedICPData.adminAccess,
       product: {
-        valueProposition: enhancedICPData.product?.valueProposition || '',
-        valuePropositionVariations: (enhancedICPData.product?.valuePropositionVariations || []).filter(item => item && item.trim()),
-        problemsWithRootCauses: (enhancedICPData.product?.problemsWithRootCauses || []).filter(item => item && item.trim()),
-        keyFeatures: (enhancedICPData.product?.keyFeatures || []).filter(item => item && item.trim()),
-        businessOutcomes: (enhancedICPData.product?.businessOutcomes || []).filter(item => item && item.trim()),
-        uniqueSellingPoints: (enhancedICPData.product?.uniqueSellingPoints || []).filter(item => item && item.trim()),
-        urgencyConsequences: (enhancedICPData.product?.urgencyConsequences || []).filter(item => item && item.trim()),
+        valueProposition: refinedValueProp.success ? refinedValueProp.data : (enhancedICPData.product?.valueProposition || ''),
+        valuePropositionVariations: refinedValuePropVariations.success ? refinedValuePropVariations.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.valuePropositionVariations || []).filter(item => item && typeof item === 'string' && item.trim()),
+        problemsWithRootCauses: refinedProblems.success ? refinedProblems.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.problemsWithRootCauses || []).filter(item => item && typeof item === 'string' && item.trim()),
+        keyFeatures: refinedFeatures.success ? refinedFeatures.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.keyFeatures || []).filter(item => item && typeof item === 'string' && item.trim()),
+        businessOutcomes: (enhancedICPData.product?.businessOutcomes || []).filter(item => item && typeof item === 'string' && item.trim()),
+        uniqueSellingPoints: refinedUSPs.success ? refinedUSPs.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.uniqueSellingPoints || []).filter(item => item && typeof item === 'string' && item.trim()),
+        urgencyConsequences: (enhancedICPData.product?.urgencyConsequences || []).filter(item => item && typeof item === 'string' && item.trim()),
         competitorAnalysis: (enhancedICPData.product?.competitorAnalysis || []).filter(comp => 
           comp && (comp.domain?.trim() || comp.differentiation?.trim())
         ),
-        useCases: (enhancedICPData.product?.useCases || []).filter(item => item && item.trim()),
-        description: enhancedICPData.product?.description || '',
+        useCases: (enhancedICPData.product?.useCases || []).filter(item => item && typeof item === 'string' && item.trim()),
+        description: refinedDescription.success ? refinedDescription.data : (enhancedICPData.product?.description || ''),
         category: enhancedICPData.product?.category || ''
       },
       offerSales: {
-        pricingTiers: (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && item.trim()),
-        clientTimeline: (enhancedICPData.offerSales?.clientTimeline || []).filter(item => item && item.trim()),
-        roiRequirements: (enhancedICPData.offerSales?.roiRequirements || []).filter(item => item && item.trim()),
-        salesDeckUrl: (enhancedICPData.offerSales?.salesDeckUrl || []).filter(item => item && item.trim())
+        pricingTiers: (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && typeof item === 'string' && item.trim()),
+        clientTimeline: (enhancedICPData.offerSales?.clientTimeline || []).filter(item => item && typeof item === 'string' && item.trim()),
+        roiRequirements: (enhancedICPData.offerSales?.roiRequirements || []).filter(item => item && typeof item === 'string' && item.trim()),
+        salesDeckUrl: (enhancedICPData.offerSales?.salesDeckUrl || []).filter(item => item && typeof item === 'string' && item.trim())
       },
       socialProof: {
         caseStudies: (enhancedICPData.socialProof?.caseStudies || []).filter(study => 
@@ -763,8 +885,8 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
         )
       },
       outboundExperience: {
-        successfulEmails: (enhancedICPData.outboundExperience?.successfulEmails || []).filter(item => item && item.trim()),
-        successfulCallScripts: (enhancedICPData.outboundExperience?.successfulCallScripts || []).filter(item => item && item.trim())
+        successfulEmails: (enhancedICPData.outboundExperience?.successfulEmails || []).filter(item => item && typeof item === 'string' && item.trim()),
+        successfulCallScripts: (enhancedICPData.outboundExperience?.successfulCallScripts || []).filter(item => item && typeof item === 'string' && item.trim())
       },
       numberOfSegments: enhancedICPData.numberOfSegments
     };
@@ -782,11 +904,11 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
           seniority: persona.seniority,
           department: Array.isArray(persona.department) ? persona.department.filter(d => typeof d === 'string' && d.trim()) : [],
           decisionInfluence: persona.decisionInfluence,
-          primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && item.trim()) : [],
-          okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && item.trim()) : [],
-          challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && item.trim()) : [],
-          painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && item.trim()) : [],
-          goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && item.trim()) : [],
+          primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && typeof item === 'string' && item.trim()) : [],
+          okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && typeof item === 'string' && item.trim()) : [],
+          challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && typeof item === 'string' && item.trim()) : [],
+          painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && typeof item === 'string' && item.trim()) : [],
+          goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && typeof item === 'string' && item.trim()) : [],
           valueProposition: Array.isArray(persona.valueProposition) ? persona.valueProposition.filter(v => typeof v === 'string' && v.trim()) : [],
           specificCTA: Array.isArray(persona.specificCTA) ? persona.specificCTA.filter(c => typeof c === 'string' && c.trim()) : []
         })).filter(persona => Array.isArray(persona.title) && persona.title.length > 0) : []
@@ -800,11 +922,11 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
         seniority: persona.seniority,
         department: Array.isArray(persona.department) ? persona.department.filter(d => typeof d === 'string' && d.trim()) : [],
         decisionInfluence: persona.decisionInfluence,
-        primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && item.trim()) : [],
-        okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && item.trim()) : [],
-        challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && item.trim()) : [],
-        painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && item.trim()) : [],
-        goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && item.trim()) : [],
+        primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && typeof item === 'string' && item.trim()) : [],
+        okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && typeof item === 'string' && item.trim()) : [],
+        challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && typeof item === 'string' && item.trim()) : [],
+        painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && typeof item === 'string' && item.trim()) : [],
+        goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && typeof item === 'string' && item.trim()) : [],
         valueProposition: Array.isArray(persona.valueProposition) ? persona.valueProposition.filter(v => typeof v === 'string' && v.trim()) : [],
         specificCTA: Array.isArray(persona.specificCTA) ? persona.specificCTA.filter(c => typeof c === 'string' && c.trim()) : []
       }));

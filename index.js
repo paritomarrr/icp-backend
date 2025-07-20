@@ -18,7 +18,8 @@ const allowedOrigins = process.env.CORS_ORIGINS
       "https://icp-frontend-six.vercel.app",
       "http://localhost:8080",
       "http://localhost:5173",
-      "http://localhost:3000"
+      "http://localhost:3000",
+      "http://localhost:5174"
     ];
 app.use(cors({
   origin: allowedOrigins,
@@ -29,6 +30,7 @@ app.use(express.json());
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
+  console.log("Health check endpoint hit");
   res.json({ 
     status: "ok", 
     message: "ICP Backend is running",

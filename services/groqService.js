@@ -649,12 +649,348 @@ Return ONLY valid JSON with these exact fields:
   }
 }
 
+// New function to refine and improve user input before saving to database
+async function refineUserInput(inputType, userInput, context = {}) {
+  const refinementPrompts = {
+    productName: `Refine this product name to be more professional and market-ready: "${userInput}". Consider the company context: ${context.companyName || 'N/A'}, domain: ${context.domain || 'N/A'}. 
+
+Return ONLY the refined product name. No explanation, no quotes, just the improved name.`,
+
+    productDescription: `Improve this product description to be more compelling and professional: "${userInput}". 
+
+Context: Company: ${context.companyName || 'N/A'}, Domain: ${context.domain || 'N/A'}
+
+Make it:
+- Clear and concise (2-3 sentences max)
+- Professional and engaging
+- Value-focused
+- Free of jargon
+
+Return ONLY the improved description. No explanation, just the refined text.`,
+
+    valueProposition: `Refine this value proposition to be more compelling and specific: "${userInput}"
+
+Context: Company: ${context.companyName || 'N/A'}, Product: ${context.productName || 'N/A'}
+
+Make it:
+- Clear and specific
+- Benefit-focused (not feature-focused)
+- Quantifiable where possible
+- 30-50 words max
+
+Return ONLY the refined value proposition. No explanation, just the improved text.`,
+
+    personaName: `Improve this persona name/title to be more professional and specific: "${userInput}"
+
+Context: Industry: ${context.industry || 'N/A'}, Company Size: ${context.companySize || 'N/A'}
+
+Make it:
+- Professional job title format
+- Specific and accurate
+- Industry-appropriate
+
+Return ONLY the refined persona name. No explanation, just the improved title.`,
+
+    segmentName: `Refine this market segment name to be more descriptive and professional: "${userInput}"
+
+Context: Company: ${context.companyName || 'N/A'}, Industry: ${context.industry || 'N/A'}
+
+Make it:
+- Descriptive and specific
+- Include relevant firmographics (size, industry, etc.)
+- Professional format
+
+Return ONLY the refined segment name. No explanation, just the improved name.`,
+
+    useCaseDescription: `Improve this use case description to be more specific and actionable: "${userInput}"
+
+Context: Product: ${context.productName || 'N/A'}, Target: ${context.targetAudience || 'N/A'}
+
+Make it:
+- Specific and actionable
+- Include the problem, solution, and outcome
+- Customer-focused language
+- 1-2 sentences
+
+Return ONLY the improved use case. No explanation, just the refined text.`,
+
+    painPoint: `Refine this pain point to be more specific and compelling: "${userInput}"
+
+Context: Persona: ${context.personaTitle || 'N/A'}, Industry: ${context.industry || 'N/A'}
+
+Make it:
+- Specific and concrete
+- Business-impact focused
+- Relatable to the target persona
+- Quantifiable where possible
+
+Return ONLY the refined pain point. No explanation, just the improved text.`,
+
+    goal: `Improve this goal statement to be more specific and measurable: "${userInput}"
+
+Context: Persona: ${context.personaTitle || 'N/A'}, Company Type: ${context.companyType || 'N/A'}
+
+Make it:
+- Specific and measurable
+- Business-outcome focused
+- Achievable and realistic
+- Time-bound where appropriate
+
+Return ONLY the refined goal. No explanation, just the improved text.`,
+
+    responsibility: `Refine this responsibility to be more specific and professional: "${userInput}"
+
+Context: Role: ${context.personaTitle || 'N/A'}, Department: ${context.department || 'N/A'}
+
+Make it:
+- Specific and actionable
+- Professional language
+- Role-appropriate
+- Clear scope and impact
+
+Return ONLY the refined responsibility. No explanation, just the improved text.`,
+
+    challenge: `Improve this challenge description to be more specific and impactful: "${userInput}"
+
+Context: Role: ${context.personaTitle || 'N/A'}, Industry: ${context.industry || 'N/A'}
+
+Make it:
+- Specific and concrete
+- Business-impact focused
+- Industry-relevant
+- Solution-oriented (what they need to overcome it)
+
+Return ONLY the refined challenge. No explanation, just the improved text.`,
+
+    feature: `Refine this product feature to be more customer-benefit focused: "${userInput}"
+
+Context: Product: ${context.productName || 'N/A'}, Target Users: ${context.targetUsers || 'N/A'}
+
+Make it:
+- Benefit-focused (what it enables, not just what it does)
+- Customer-centric language
+- Clear value delivery
+- Concise and specific
+
+Return ONLY the refined feature. No explanation, just the improved text.`,
+
+    differentiation: `Improve this differentiation statement to be more compelling and specific: "${userInput}"
+
+Context: Company: ${context.companyName || 'N/A'}, Competitors: ${context.competitors || 'N/A'}
+
+Make it:
+- Specific and unique
+- Benefit-focused
+- Competitive advantage clear
+- Credible and defensible
+- 2-3 sentences max
+
+Return ONLY the refined differentiation. No explanation, just the improved text.`,
+
+    objection: `Refine this objection to be more realistic and specific: "${userInput}"
+
+Context: Persona: ${context.personaTitle || 'N/A'}, Product: ${context.productName || 'N/A'}
+
+Make it:
+- Realistic and common
+- Specific to the persona/situation
+- Business-focused (budget, time, resources, etc.)
+- Addressable with proper response
+
+Return ONLY the refined objection. No explanation, just the improved text.`,
+
+    competitorAnalysis: `Improve this competitor analysis to be more strategic and actionable: "${userInput}"
+
+Context: Our Company: ${context.companyName || 'N/A'}, Market: ${context.market || 'N/A'}
+
+Make it:
+- Specific competitive advantages/disadvantages
+- Strategic insights
+- Actionable for sales/marketing
+- Fact-based and objective
+
+Return ONLY the refined analysis. No explanation, just the improved text.`,
+
+    caseStudy: `Enhance this case study description to be more compelling and specific: "${userInput}"
+
+Context: Product: ${context.productName || 'N/A'}, Industry: ${context.industry || 'N/A'}
+
+Make it:
+- Specific customer and situation
+- Clear problem, solution, results
+- Quantified outcomes where possible
+- Credible and detailed
+
+Return ONLY the refined case study. No explanation, just the improved text.`,
+
+    testimonial: `Improve this testimonial to be more credible and impactful: "${userInput}"
+
+Context: Customer Type: ${context.customerType || 'N/A'}, Use Case: ${context.useCase || 'N/A'}
+
+Make it:
+- Specific and detailed
+- Credible language (not overly promotional)
+- Include specific benefits/results
+- Attribution-ready format
+
+Return ONLY the refined testimonial. No explanation, just the improved text.`,
+
+    callToAction: `Refine this call-to-action to be more compelling and specific: "${userInput}"
+
+Context: Target: ${context.targetAudience || 'N/A'}, Stage: ${context.buyingStage || 'N/A'}
+
+Make it:
+- Action-oriented and specific
+- Value-focused
+- Urgency where appropriate
+- Clear next step
+
+Return ONLY the refined CTA. No explanation, just the improved text.`,
+
+    // Batch refinement for arrays
+    batchTextArray: `Improve this list of items to be more professional, specific, and consistent:
+
+${Array.isArray(userInput) ? userInput.map((item, i) => `${i + 1}. ${item}`).join('\n') : userInput}
+
+Context: Type: ${context.itemType || 'N/A'}, Domain: ${context.domain || 'N/A'}
+
+Make each item:
+- Professional and specific
+- Consistent in tone and format
+- Value-focused where appropriate
+- Clear and actionable
+
+Return ONLY a JSON array of the improved items. No explanation, no markdown, just the JSON array.`
+  };
+
+  const prompt = refinementPrompts[inputType];
+  if (!prompt) {
+    console.warn(`No refinement prompt found for type: ${inputType}`);
+    return { success: true, data: userInput }; // Return original if no refinement available
+  }
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'llama3-70b-8192',
+        max_tokens: 1000,
+        temperature: 0.3, // Lower temperature for more consistent refinement
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content?.trim();
+
+    if (!content) {
+      console.warn(`No content received for refinement of ${inputType}`);
+      return { success: true, data: userInput }; // Return original
+    }
+
+    // For array types, try to parse JSON
+    if (inputType === 'batchTextArray') {
+      try {
+        const parsed = JSON.parse(content);
+        return { success: true, data: Array.isArray(parsed) ? parsed : [content] };
+      } catch (e) {
+        console.warn(`Failed to parse array refinement for ${inputType}:`, content);
+        return { success: true, data: Array.isArray(userInput) ? userInput : [userInput] };
+      }
+    }
+
+    // For single values, return the refined content
+    return { success: true, data: content };
+
+  } catch (error) {
+    console.error(`Error refining ${inputType}:`, error);
+    return { success: true, data: userInput }; // Return original on error
+  }
+}
+
+// Helper function to refine complex objects with multiple fields
+async function refineComplexObject(objectType, inputObject, context = {}) {
+  const refinementMappings = {
+    product: {
+      name: 'productName',
+      description: 'productDescription',
+      valueProposition: 'valueProposition',
+      problems: 'batchTextArray',
+      features: 'batchTextArray',
+      benefits: 'batchTextArray',
+      useCases: 'batchTextArray',
+      uniqueSellingPoints: 'batchTextArray'
+    },
+    persona: {
+      name: 'personaName',
+      title: 'personaName',
+      painPoints: 'batchTextArray',
+      goals: 'batchTextArray',
+      responsibilities: 'batchTextArray',
+      challenges: 'batchTextArray',
+      objections: 'batchTextArray'
+    },
+    segment: {
+      name: 'segmentName',
+      description: 'productDescription',
+      characteristics: 'batchTextArray',
+      painPoints: 'batchTextArray'
+    }
+  };
+
+  const fieldMappings = refinementMappings[objectType];
+  if (!fieldMappings) {
+    return { success: true, data: inputObject };
+  }
+
+  const refinedObject = { ...inputObject };
+  const refinementPromises = [];
+
+  // Process each field that needs refinement
+  for (const [field, refinementType] of Object.entries(fieldMappings)) {
+    if (inputObject[field] !== undefined && inputObject[field] !== null && inputObject[field] !== '') {
+      const fieldContext = {
+        ...context,
+        itemType: field,
+        [objectType + 'Name']: inputObject.name || inputObject.title
+      };
+
+      refinementPromises.push(
+        refineUserInput(refinementType, inputObject[field], fieldContext)
+          .then(result => ({ field, result }))
+      );
+    }
+  }
+
+  try {
+    const results = await Promise.all(refinementPromises);
+    
+    // Apply refined results
+    results.forEach(({ field, result }) => {
+      if (result.success) {
+        refinedObject[field] = result.data;
+      }
+    });
+
+    return { success: true, data: refinedObject };
+  } catch (error) {
+    console.error(`Error refining ${objectType}:`, error);
+    return { success: true, data: inputObject };
+  }
+}
+
 module.exports = {
   callClaudeForICP,
   generateStepContent,
   generatePersonaDetails,
   generateSegmentDetails,
   generateProductDetails,
-  generateProductFieldSuggestions
+  generateProductFieldSuggestions,
+  refineUserInput,
+  refineComplexObject
 };
 
