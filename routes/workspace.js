@@ -4,11 +4,18 @@ const auth = require("../middleware/auth");
 const router = express.Router();
 const { callClaudeForICP, generateProductDetails, generatePersonaDetails, generateSegmentDetails, refineUserInput, refineComplexObject } = require('../services/groqService');
 const slugify = require('slugify');
+const { addCollaborator, getCollaborators, removeCollaborator } = require("../controllers/workspaceController");
 
 // Helper function to safely filter string arrays
 const filterStringArray = (arr) => {
   if (!Array.isArray(arr)) return [];
   return arr.filter(item => item && typeof item === 'string' && item.trim());
+};
+
+// Helper function to check if user has access to workspace (owner or collaborator)
+const hasWorkspaceAccess = (workspace, userId) => {
+  return workspace.ownerId.toString() === userId || 
+         workspace.collaborators.some(collaboratorId => collaboratorId.toString() === userId);
 };
 
 // Create a new workspace
@@ -76,6 +83,11 @@ router.put('/:slug/icp', auth, async (req, res) => {
   
       if (!workspace) {
         return res.status(404).json({ error: 'Workspace not found' });
+      }
+
+      // Check if user has access to this workspace
+      if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+        return res.status(403).json({ error: "You do not have access to this workspace" });
       }
   
       // Convert simple arrays to detailed objects if needed
@@ -372,6 +384,11 @@ router.post('/:slug/icp/re-enrich', auth, async (req, res) => {
       const workspace = await Workspace.findOne({ slug: req.params.slug });
       if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
 
+      // Check if user has access to this workspace
+      if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+        return res.status(403).json({ error: "You do not have access to this workspace" });
+      }
+
       const variants = await callClaudeForICP(workspace);
       workspace.icpEnrichmentVersions = variants;
       await workspace.save();
@@ -393,9 +410,10 @@ router.get("/", auth, async (req, res) => {
       $or: [
         { ownerId: userId },
         { creatorId: userId },
-        { collaborators: { $elemMatch: { email: userEmail } } }
+        { collaborators: userId }
       ]
     });
+
 
     res.json(workspaces);
   } catch (err) {
@@ -404,7 +422,7 @@ router.get("/", auth, async (req, res) => {
 });
 
 // Get a workspace by slug
-router.get("/slug/:slug", async (req, res) => {
+router.get("/slug/:slug", auth, async (req, res) => {
     try {
       const { slug } = req.params;
   
@@ -413,14 +431,16 @@ router.get("/slug/:slug", async (req, res) => {
       if (!workspace) {
         return res.status(404).json({ error: "Workspace not found" });
       }
+
+      if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+        return res.status(403).json({ error: "You do not have access to this workspace" });
+      }
   
       return res.status(200).json(workspace);
     } catch (error) {
       return res.status(500).json({ error: "Internal Server Error" });
     }
   });
-
-
 
 // Delete a workspace by ID
 router.delete("/:id", auth, async (req, res) => {
@@ -462,6 +482,11 @@ router.post('/:slug/products', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
+    }
+
     // Refine user input before saving
     const context = {
       companyName: workspace.companyName,
@@ -497,6 +522,11 @@ router.put('/:slug/products/:productId', auth, async (req, res) => {
     const workspace = await Workspace.findOne({ slug });
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
     }
 
     const product = workspace.products.id(productId);
@@ -535,6 +565,11 @@ router.delete('/:slug/products/:productId', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
+    }
+
     workspace.products.id(productId).remove();
     await workspace.save();
 
@@ -555,6 +590,11 @@ router.post('/:slug/segments/:segmentId/personas', auth, async (req, res) => {
     const workspace = await Workspace.findOne({ slug });
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
     }
 
     const segment = workspace.segments.id(segmentId);
@@ -603,6 +643,11 @@ router.get('/:slug/personas', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
+    }
+
     // Collect all personas from all segments
     const allPersonas = [];
     workspace.segments.forEach(segment => {
@@ -632,6 +677,11 @@ router.put('/:slug/segments/:segmentId/personas/:personaId', auth, async (req, r
     const workspace = await Workspace.findOne({ slug });
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
     }
 
     const segment = workspace.segments.id(segmentId);
@@ -677,6 +727,11 @@ router.delete('/:slug/segments/:segmentId/personas/:personaId', auth, async (req
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
+    }
+
     const segment = workspace.segments.id(segmentId);
     if (!segment) {
       return res.status(404).json({ error: 'Segment not found' });
@@ -702,6 +757,11 @@ router.post('/:slug/segments', auth, async (req, res) => {
     const workspace = await Workspace.findOne({ slug });
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
     }
 
     // Refine user input before saving
@@ -741,6 +801,11 @@ router.put('/:slug/segments/:segmentId', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
+    }
+
     const segment = workspace.segments.id(segmentId);
     if (!segment) {
       return res.status(404).json({ error: 'Segment not found' });
@@ -777,6 +842,11 @@ router.delete('/:slug/segments/:segmentId', auth, async (req, res) => {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
+      return res.status(403).json({ error: "You do not have access to this workspace" });
+    }
+
     workspace.segments.id(segmentId).remove();
     await workspace.save();
 
@@ -810,11 +880,11 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
       });
     }
 
-    // Check if user owns the workspace
-    if (workspace.ownerId.toString() !== req.user.userId) {
+    // Check if user has access to this workspace
+    if (!hasWorkspaceAccess(workspace, req.user.userId)) {
       return res.status(403).json({
         success: false,
-        error: 'Not authorized to modify this workspace'
+        error: 'You do not have access to this workspace'
       });
     }
 
@@ -952,5 +1022,13 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
     });
   }
 });
+
+// Add a collaborator to a workspace
+router.post('/add-collaborator', auth, addCollaborator);
+
+router.get('/get-collaborators/:workspaceId', auth, getCollaborators);
+
+router.post('/remove-collaborator', auth, removeCollaborator);
+
 
 module.exports = router;

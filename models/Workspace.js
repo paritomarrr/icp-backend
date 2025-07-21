@@ -34,10 +34,10 @@ const ProductSchema = new mongoose.Schema({
   useCases: [String],
   description: String,
   category: String,
-  pricingTiers: [String], // Added field
-  clientTimeline: [String], // Added field
-  roiRequirements: [String], // Added field
-  salesDeckUrl: [String] // Added field
+  pricingTiers: [String],
+  clientTimeline: [String],
+  roiRequirements: [String],
+  salesDeckUrl: [String]
 });
 
 // Enhanced schema for detailed persona information
@@ -54,8 +54,8 @@ const PersonaSchema = new mongoose.Schema({
   goals: [String],
   valueProposition: [String],
   specificCTA: [String],
-  description: String, // Added field
-  category: String // Added field
+  description: String,
+  category: String
 });
 
 // Enhanced schema for detailed segment information
@@ -69,7 +69,7 @@ const SegmentSchema = new mongoose.Schema({
     enum: ['Unaware', 'Problem Aware', 'Solution Aware', 'Product Aware', 'Brand Aware', ''], 
     default: '' 
   },
-  personas: [PersonaSchema] // Nested personas within each segment
+  personas: [PersonaSchema]
 });
 
 // Schema for social proof
@@ -87,14 +87,14 @@ const SocialProofSchema = new mongoose.Schema({
     metrics: String,
     title: String
   }],
-  metrics: String // Added field
+  metrics: String
 });
 
 // Schema for outbound experience
 const OutboundExperienceSchema = new mongoose.Schema({
   successfulEmails: [String],
   successfulCallScripts: [String],
-  outreachPerformance: String // Added field
+  outreachPerformance: String
 });
 
 const WorkspaceSchema = new mongoose.Schema({
@@ -104,9 +104,13 @@ const WorkspaceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  collaborators: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   domain: String,
-  companyDescription: String, // Added field
-  companyValueAndMissionSummary: String, // Added field
+  companyDescription: String, 
+  companyValueAndMissionSummary: String,
   adminAccess: AdminAccessSchema,
   product: ProductSchema,
   offerSales: OfferSalesSchema,
@@ -115,7 +119,7 @@ const WorkspaceSchema = new mongoose.Schema({
   segments: [SegmentSchema],
   personas: [PersonaSchema],
   outboundExperience: OutboundExperienceSchema,
-  enrichmentVersions: [String] // Added field
+  enrichmentVersions: [String]
 }, {
   timestamps: true
 });
