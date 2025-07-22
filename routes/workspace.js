@@ -255,7 +255,7 @@ router.put('/:slug/icp', auth, async (req, res) => {
             buyingProcesses: [],
             firmographics: [],
             benefits: '',
-            awarenessLevel: 'Solution',
+            awarenessLevel: ['Solution Aware'],
             priority: 'medium',
             status: 'active',
             qualification: {
@@ -888,38 +888,156 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
       });
     }
 
-    // Refine critical text fields before saving
+    // Enhance ALL user responses using Groq before saving
     const context = {
       companyName: workspace.companyName,
       domain: enhancedICPData.domain,
       productName: workspace.products?.[0]?.name
     };
 
-    // Refine key single text fields
-    const refinedValueProp = enhancedICPData.product?.valueProposition ? 
-      await refineUserInput('valueProposition', enhancedICPData.product.valueProposition, context) : 
-      { success: true, data: '' };
+    // Helper function to safely refine text
+    const safeRefine = async (type, text, ctx = {}) => {
+      if (!text || (Array.isArray(text) && text.length === 0)) {
+        return { success: true, data: Array.isArray(text) ? [] : '' };
+      }
+      try {
+        return await refineUserInput(type, text, { ...context, ...ctx });
+      } catch (error) {
+        console.warn(`Refinement failed for ${type}:`, error);
+        return { success: true, data: text };
+      }
+    };
 
-    const refinedDescription = enhancedICPData.product?.description ? 
-      await refineUserInput('productDescription', enhancedICPData.product.description, context) : 
-      { success: true, data: '' };
+    // Refine Product fields
+    const refinedValueProp = await safeRefine('valueProposition', enhancedICPData.product?.valueProposition);
+    const refinedDescription = await safeRefine('productDescription', enhancedICPData.product?.description);
+    const refinedCategory = await safeRefine('productName', enhancedICPData.product?.category);
+    
+    // Refine Product arrays
+    const refinedValuePropVariations = await safeRefine('batchTextArray', enhancedICPData.product?.valuePropositionVariations, { itemType: 'valuePropositionVariations' });
+    const refinedProblems = await safeRefine('batchTextArray', enhancedICPData.product?.problemsWithRootCauses, { itemType: 'problemsWithRootCauses' });
+    const refinedFeatures = await safeRefine('batchTextArray', enhancedICPData.product?.keyFeatures, { itemType: 'keyFeatures' });
+    const refinedUSPs = await safeRefine('batchTextArray', enhancedICPData.product?.uniqueSellingPoints, { itemType: 'uniqueSellingPoints' });
+    const refinedBusinessOutcomes = await safeRefine('batchTextArray', enhancedICPData.product?.businessOutcomes, { itemType: 'businessOutcomes' });
+    const refinedUrgencyConsequences = await safeRefine('batchTextArray', enhancedICPData.product?.urgencyConsequences, { itemType: 'urgencyConsequences' });
+    const refinedUseCases = await safeRefine('batchTextArray', enhancedICPData.product?.useCases, { itemType: 'useCases' });
 
-    // Refine array fields
-    const refinedValuePropVariations = enhancedICPData.product?.valuePropositionVariations?.length > 0 ? 
-      await refineUserInput('batchTextArray', enhancedICPData.product.valuePropositionVariations, { ...context, itemType: 'valuePropositionVariations' }) : 
-      { success: true, data: [] };
+    // Refine OfferSales arrays
+    const refinedPricingTiers = await safeRefine('batchTextArray', enhancedICPData.offerSales?.pricingTiers, { itemType: 'pricingTiers' });
+    const refinedClientTimeline = await safeRefine('batchTextArray', enhancedICPData.offerSales?.clientTimeline, { itemType: 'clientTimeline' });
+    const refinedRoiRequirements = await safeRefine('batchTextArray', enhancedICPData.offerSales?.roiRequirements, { itemType: 'roiRequirements' });
 
-    const refinedProblems = enhancedICPData.product?.problemsWithRootCauses?.length > 0 ? 
-      await refineUserInput('batchTextArray', enhancedICPData.product.problemsWithRootCauses, { ...context, itemType: 'problemsWithRootCauses' }) : 
-      { success: true, data: [] };
+    // Refine OutboundExperience arrays
+    const refinedSuccessfulEmails = await safeRefine('batchTextArray', enhancedICPData.outboundExperience?.successfulEmails, { itemType: 'successfulEmails' });
+    const refinedSuccessfulCallScripts = await safeRefine('batchTextArray', enhancedICPData.outboundExperience?.successfulCallScripts, { itemType: 'successfulCallScripts' });
 
-    const refinedFeatures = enhancedICPData.product?.keyFeatures?.length > 0 ? 
-      await refineUserInput('batchTextArray', enhancedICPData.product.keyFeatures, { ...context, itemType: 'keyFeatures' }) : 
-      { success: true, data: [] };
+    // Refine CompetitorAnalysis
+    const refinedCompetitorAnalysis = enhancedICPData.product?.competitorAnalysis?.length > 0 ?
+      await Promise.all(enhancedICPData.product.competitorAnalysis.map(async (comp) => {
+        if (!comp || (!comp.domain?.trim() && !comp.differentiation?.trim())) return comp;
+        
+        const refinedDiff = comp.differentiation?.trim() ? 
+          await safeRefine('differentiation', comp.differentiation, { companyName: comp.domain }) : 
+          { success: true, data: comp.differentiation || '' };
+        
+        return {
+          domain: comp.domain || '',
+          differentiation: refinedDiff.success ? refinedDiff.data : comp.differentiation || ''
+        };
+      })) : [];
 
-    const refinedUSPs = enhancedICPData.product?.uniqueSellingPoints?.length > 0 ? 
-      await refineUserInput('batchTextArray', enhancedICPData.product.uniqueSellingPoints, { ...context, itemType: 'uniqueSellingPoints' }) : 
-      { success: true, data: [] };
+    // Refine SocialProof
+    const refinedCaseStudies = enhancedICPData.socialProof?.caseStudies?.length > 0 ?
+      await Promise.all(enhancedICPData.socialProof.caseStudies.map(async (study) => {
+        if (!study || (!study.title?.trim() && !study.description?.trim())) return study;
+        
+        const refinedTitle = study.title?.trim() ? 
+          await safeRefine('productName', study.title) : 
+          { success: true, data: study.title || '' };
+        
+        const refinedDesc = study.description?.trim() ? 
+          await safeRefine('caseStudy', study.description) : 
+          { success: true, data: study.description || '' };
+        
+        return {
+          url: study.url || '',
+          title: refinedTitle.success ? refinedTitle.data : study.title || '',
+          description: refinedDesc.success ? refinedDesc.data : study.description || ''
+        };
+      })) : [];
+
+    const refinedTestimonials = enhancedICPData.socialProof?.testimonials?.length > 0 ?
+      await Promise.all(enhancedICPData.socialProof.testimonials.map(async (testimonial) => {
+        if (!testimonial || (!testimonial.content?.trim() && !testimonial.author?.trim())) return testimonial;
+        
+        const refinedContent = testimonial.content?.trim() ? 
+          await safeRefine('testimonial', testimonial.content) : 
+          { success: true, data: testimonial.content || '' };
+        
+        const refinedAuthor = testimonial.author?.trim() ? 
+          await safeRefine('personaName', testimonial.author) : 
+          { success: true, data: testimonial.author || '' };
+        
+        return {
+          content: refinedContent.success ? refinedContent.data : testimonial.content || '',
+          author: refinedAuthor.success ? refinedAuthor.data : testimonial.author || ''
+        };
+      })) : [];
+
+    // Helper function to refine persona data
+    const refinePersona = async (persona, segmentContext = {}) => {
+      const personaContext = { ...context, ...segmentContext, personaTitle: Array.isArray(persona.title) ? persona.title[0] : persona.title };
+      
+      const refinedTitle = Array.isArray(persona.title) && persona.title.length > 0 ?
+        await safeRefine('batchTextArray', persona.title, { itemType: 'personaTitle' }) :
+        { success: true, data: [] };
+      
+      const refinedDepartment = Array.isArray(persona.department) && persona.department.length > 0 ?
+        await safeRefine('batchTextArray', persona.department, { itemType: 'personaDepartment' }) :
+        { success: true, data: [] };
+      
+      const refinedResponsibilities = Array.isArray(persona.primaryResponsibilities) && persona.primaryResponsibilities.length > 0 ?
+        await safeRefine('batchTextArray', persona.primaryResponsibilities, { itemType: 'personaResponsibilities' }) :
+        { success: true, data: [] };
+      
+      const refinedOkrs = Array.isArray(persona.okrs) && persona.okrs.length > 0 ?
+        await safeRefine('batchTextArray', persona.okrs, { itemType: 'personaOKRs' }) :
+        { success: true, data: [] };
+      
+      const refinedChallenges = Array.isArray(persona.challenges) && persona.challenges.length > 0 ?
+        await safeRefine('batchTextArray', persona.challenges, { itemType: 'personaChallenges' }) :
+        { success: true, data: [] };
+      
+      const refinedPainPoints = Array.isArray(persona.painPoints) && persona.painPoints.length > 0 ?
+        await safeRefine('batchTextArray', persona.painPoints, { itemType: 'painPoint' }) :
+        { success: true, data: [] };
+      
+      const refinedGoals = Array.isArray(persona.goals) && persona.goals.length > 0 ?
+        await safeRefine('batchTextArray', persona.goals, { itemType: 'goal' }) :
+        { success: true, data: [] };
+      
+      const refinedValueProp = Array.isArray(persona.valueProposition) && persona.valueProposition.length > 0 ?
+        await safeRefine('batchTextArray', persona.valueProposition, { itemType: 'personaValueProp' }) :
+        { success: true, data: [] };
+      
+      const refinedCTA = Array.isArray(persona.specificCTA) && persona.specificCTA.length > 0 ?
+        await safeRefine('batchTextArray', persona.specificCTA, { itemType: 'personaCTA' }) :
+        { success: true, data: [] };
+
+      return {
+        title: refinedTitle.success ? refinedTitle.data.filter(t => typeof t === 'string' && t.trim()) : (Array.isArray(persona.title) ? persona.title.filter(t => typeof t === 'string' && t.trim()) : []),
+        seniority: persona.seniority,
+        department: refinedDepartment.success ? refinedDepartment.data.filter(d => typeof d === 'string' && d.trim()) : (Array.isArray(persona.department) ? persona.department.filter(d => typeof d === 'string' && d.trim()) : []),
+        decisionInfluence: persona.decisionInfluence,
+        primaryResponsibilities: refinedResponsibilities.success ? refinedResponsibilities.data.filter(item => item && typeof item === 'string' && item.trim()) : (Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && typeof item === 'string' && item.trim()) : []),
+        okrs: refinedOkrs.success ? refinedOkrs.data.filter(item => item && typeof item === 'string' && item.trim()) : (Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && typeof item === 'string' && item.trim()) : []),
+        challenges: refinedChallenges.success ? refinedChallenges.data.filter(item => item && typeof item === 'string' && item.trim()) : (Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && typeof item === 'string' && item.trim()) : []),
+        painPoints: refinedPainPoints.success ? refinedPainPoints.data.filter(item => item && typeof item === 'string' && item.trim()) : (Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && typeof item === 'string' && item.trim()) : []),
+        goals: refinedGoals.success ? refinedGoals.data.filter(item => item && typeof item === 'string' && item.trim()) : (Array.isArray(persona.goals) ? persona.goals.filter(item => item && typeof item === 'string' && item.trim()) : []),
+        valueProposition: refinedValueProp.success ? refinedValueProp.data.filter(v => typeof v === 'string' && v.trim()) : (Array.isArray(persona.valueProposition) ? persona.valueProposition.filter(v => typeof v === 'string' && v.trim()) : []),
+        specificCTA: refinedCTA.success ? refinedCTA.data.filter(c => typeof c === 'string' && c.trim()) : (Array.isArray(persona.specificCTA) ? persona.specificCTA.filter(c => typeof c === 'string' && c.trim()) : [])
+      };
+    };
 
     // Transform and save the enhanced ICP data to match new schema
     const updateData = {
@@ -930,76 +1048,82 @@ router.post('/:workspaceId/enhanced-icp', auth, async (req, res) => {
         valuePropositionVariations: refinedValuePropVariations.success ? refinedValuePropVariations.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.valuePropositionVariations || []).filter(item => item && typeof item === 'string' && item.trim()),
         problemsWithRootCauses: refinedProblems.success ? refinedProblems.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.problemsWithRootCauses || []).filter(item => item && typeof item === 'string' && item.trim()),
         keyFeatures: refinedFeatures.success ? refinedFeatures.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.keyFeatures || []).filter(item => item && typeof item === 'string' && item.trim()),
-        businessOutcomes: (enhancedICPData.product?.businessOutcomes || []).filter(item => item && typeof item === 'string' && item.trim()),
+        businessOutcomes: refinedBusinessOutcomes.success ? refinedBusinessOutcomes.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.businessOutcomes || []).filter(item => item && typeof item === 'string' && item.trim()),
         uniqueSellingPoints: refinedUSPs.success ? refinedUSPs.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.uniqueSellingPoints || []).filter(item => item && typeof item === 'string' && item.trim()),
-        urgencyConsequences: (enhancedICPData.product?.urgencyConsequences || []).filter(item => item && typeof item === 'string' && item.trim()),
-        competitorAnalysis: (enhancedICPData.product?.competitorAnalysis || []).filter(comp => 
+        urgencyConsequences: refinedUrgencyConsequences.success ? refinedUrgencyConsequences.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.urgencyConsequences || []).filter(item => item && typeof item === 'string' && item.trim()),
+        competitorAnalysis: refinedCompetitorAnalysis.filter(comp => 
           comp && (comp.domain?.trim() || comp.differentiation?.trim())
         ),
-        useCases: (enhancedICPData.product?.useCases || []).filter(item => item && typeof item === 'string' && item.trim()),
+        useCases: refinedUseCases.success ? refinedUseCases.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.product?.useCases || []).filter(item => item && typeof item === 'string' && item.trim()),
         description: refinedDescription.success ? refinedDescription.data : (enhancedICPData.product?.description || ''),
-        category: enhancedICPData.product?.category || ''
+        category: refinedCategory.success ? refinedCategory.data : (enhancedICPData.product?.category || '')
       },
       offerSales: {
-        pricingTiers: (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && typeof item === 'string' && item.trim()),
-        clientTimeline: (enhancedICPData.offerSales?.clientTimeline || []).filter(item => item && typeof item === 'string' && item.trim()),
-        roiRequirements: (enhancedICPData.offerSales?.roiRequirements || []).filter(item => item && typeof item === 'string' && item.trim()),
+        pricingTiers: refinedPricingTiers.success ? refinedPricingTiers.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.offerSales?.pricingTiers || []).filter(item => item && typeof item === 'string' && item.trim()),
+        clientTimeline: refinedClientTimeline.success ? refinedClientTimeline.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.offerSales?.clientTimeline || []).filter(item => item && typeof item === 'string' && item.trim()),
+        roiRequirements: refinedRoiRequirements.success ? refinedRoiRequirements.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.offerSales?.roiRequirements || []).filter(item => item && typeof item === 'string' && item.trim()),
         salesDeckUrl: (enhancedICPData.offerSales?.salesDeckUrl || []).filter(item => item && typeof item === 'string' && item.trim())
       },
       socialProof: {
-        caseStudies: (enhancedICPData.socialProof?.caseStudies || []).filter(study => 
+        caseStudies: refinedCaseStudies.filter(study => 
           study && (study.url?.trim() || study.title?.trim() || study.description?.trim())
         ),
-        testimonials: (enhancedICPData.socialProof?.testimonials || []).filter(testimonial => 
+        testimonials: refinedTestimonials.filter(testimonial => 
           testimonial && (testimonial.content?.trim() || testimonial.author?.trim())
         )
       },
       outboundExperience: {
-        successfulEmails: (enhancedICPData.outboundExperience?.successfulEmails || []).filter(item => item && typeof item === 'string' && item.trim()),
-        successfulCallScripts: (enhancedICPData.outboundExperience?.successfulCallScripts || []).filter(item => item && typeof item === 'string' && item.trim())
+        successfulEmails: refinedSuccessfulEmails.success ? refinedSuccessfulEmails.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.outboundExperience?.successfulEmails || []).filter(item => item && typeof item === 'string' && item.trim()),
+        successfulCallScripts: refinedSuccessfulCallScripts.success ? refinedSuccessfulCallScripts.data.filter(item => item && typeof item === 'string' && item.trim()) : (enhancedICPData.outboundExperience?.successfulCallScripts || []).filter(item => item && typeof item === 'string' && item.trim())
       },
       numberOfSegments: enhancedICPData.numberOfSegments
     };
 
-    // Handle segments data with nested personas  
+    // Handle segments data with nested personas - with refinement
     if (enhancedICPData.segments && enhancedICPData.segments.length > 0) {
-      updateData.segments = enhancedICPData.segments.map(segment => ({
-        name: segment.name,
-        industry: segment.industry,
-        companySize: segment.companySize,
-        geography: segment.geography,
-        awarenessLevel: segment.awarenessLevel || '',
-        personas: segment.personas ? segment.personas.map(persona => ({
-          title: Array.isArray(persona.title) ? persona.title.filter(t => typeof t === 'string' && t.trim()) : [],
-          seniority: persona.seniority,
-          department: Array.isArray(persona.department) ? persona.department.filter(d => typeof d === 'string' && d.trim()) : [],
-          decisionInfluence: persona.decisionInfluence,
-          primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && typeof item === 'string' && item.trim()) : [],
-          okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && typeof item === 'string' && item.trim()) : [],
-          challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && typeof item === 'string' && item.trim()) : [],
-          painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && typeof item === 'string' && item.trim()) : [],
-          goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && typeof item === 'string' && item.trim()) : [],
-          valueProposition: Array.isArray(persona.valueProposition) ? persona.valueProposition.filter(v => typeof v === 'string' && v.trim()) : [],
-          specificCTA: Array.isArray(persona.specificCTA) ? persona.specificCTA.filter(c => typeof c === 'string' && c.trim()) : []
-        })).filter(persona => Array.isArray(persona.title) && persona.title.length > 0) : []
+      updateData.segments = await Promise.all(enhancedICPData.segments.map(async (segment) => {
+        // Refine segment-level fields
+        const segmentContext = { segmentIndustry: segment.industry, segmentName: segment.name };
+        
+        const refinedSegmentName = segment.name ? 
+          await safeRefine('segmentName', segment.name, segmentContext) :
+          { success: true, data: segment.name || '' };
+        
+        const refinedIndustry = segment.industry ? 
+          await safeRefine('productName', segment.industry, segmentContext) :
+          { success: true, data: segment.industry || '' };
+        
+        const refinedCompanySize = segment.companySize ? 
+          await safeRefine('productName', segment.companySize, segmentContext) :
+          { success: true, data: segment.companySize || '' };
+        
+        const refinedGeography = segment.geography ? 
+          await safeRefine('productName', segment.geography, segmentContext) :
+          { success: true, data: segment.geography || '' };
+        
+        const refinedAwarenessLevel = Array.isArray(segment.awarenessLevel) && segment.awarenessLevel.length > 0 ?
+          await safeRefine('batchTextArray', segment.awarenessLevel, { ...segmentContext, itemType: 'awarenessLevel' }) :
+          { success: true, data: [] };
+
+        // Refine personas within this segment
+        const refinedPersonas = segment.personas ? 
+          await Promise.all(segment.personas.map(persona => refinePersona(persona, segmentContext))) : 
+          [];
+
+        return {
+          name: refinedSegmentName.success ? refinedSegmentName.data : segment.name,
+          industry: refinedIndustry.success ? refinedIndustry.data : segment.industry,
+          companySize: refinedCompanySize.success ? refinedCompanySize.data : segment.companySize,
+          geography: refinedGeography.success ? refinedGeography.data : segment.geography,
+          awarenessLevel: refinedAwarenessLevel.success ? refinedAwarenessLevel.data.filter(level => typeof level === 'string' && level.trim()) : (Array.isArray(segment.awarenessLevel) ? segment.awarenessLevel.filter(level => typeof level === 'string' && level.trim()) : []),
+          personas: refinedPersonas.filter(persona => Array.isArray(persona.title) && persona.title.length > 0)
+        };
       }));
     }
 
-    // Handle top-level personas array
+    // Handle top-level personas array - with refinement
     if (enhancedICPData.personas && enhancedICPData.personas.length > 0) {
-      updateData.personas = enhancedICPData.personas.map(persona => ({
-        title: Array.isArray(persona.title) ? persona.title.filter(t => typeof t === 'string' && t.trim()) : [],
-        seniority: persona.seniority,
-        department: Array.isArray(persona.department) ? persona.department.filter(d => typeof d === 'string' && d.trim()) : [],
-        decisionInfluence: persona.decisionInfluence,
-        primaryResponsibilities: Array.isArray(persona.primaryResponsibilities) ? persona.primaryResponsibilities.filter(item => item && typeof item === 'string' && item.trim()) : [],
-        okrs: Array.isArray(persona.okrs) ? persona.okrs.filter(item => item && typeof item === 'string' && item.trim()) : [],
-        challenges: Array.isArray(persona.challenges) ? persona.challenges.filter(item => item && typeof item === 'string' && item.trim()) : [],
-        painPoints: Array.isArray(persona.painPoints) ? persona.painPoints.filter(item => item && typeof item === 'string' && item.trim()) : [],
-        goals: Array.isArray(persona.goals) ? persona.goals.filter(item => item && typeof item === 'string' && item.trim()) : [],
-        valueProposition: Array.isArray(persona.valueProposition) ? persona.valueProposition.filter(v => typeof v === 'string' && v.trim()) : [],
-        specificCTA: Array.isArray(persona.specificCTA) ? persona.specificCTA.filter(c => typeof c === 'string' && c.trim()) : []
-      }));
+      updateData.personas = await Promise.all(enhancedICPData.personas.map(persona => refinePersona(persona)));
     }
 
     // Apply all updates

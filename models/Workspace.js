@@ -64,10 +64,9 @@ const SegmentSchema = new mongoose.Schema({
   industry: String,
   companySize: String,
   geography: String,
-  awarenessLevel: { 
-    type: String, 
-    enum: ['Unaware', 'Problem Aware', 'Solution Aware', 'Product Aware', 'Brand Aware', ''], 
-    default: '' 
+  awarenessLevel: {
+    type: [String],
+    default: []
   },
   personas: [PersonaSchema]
 });
@@ -122,6 +121,28 @@ const WorkspaceSchema = new mongoose.Schema({
   enrichmentVersions: [String]
 }, {
   timestamps: true
+});
+
+// Pre-save hook to handle legacy awarenessLevel data migration
+WorkspaceSchema.pre('save', function(next) {
+  // Handle legacy awarenessLevel conversion from string to array
+  if (this.segments && this.segments.length > 0) {
+    this.segments.forEach(segment => {
+      // If awarenessLevel is a string, convert to array
+      if (typeof segment.awarenessLevel === 'string') {
+        segment.awarenessLevel = segment.awarenessLevel ? [segment.awarenessLevel] : [];
+      }
+      // Ensure it's always an array and filter out empty strings
+      if (!Array.isArray(segment.awarenessLevel)) {
+        segment.awarenessLevel = [];
+      } else {
+        segment.awarenessLevel = segment.awarenessLevel.filter(level => 
+          level && typeof level === 'string' && level.trim()
+        );
+      }
+    });
+  }
+  next();
 });
 
 module.exports = mongoose.model('Workspace', WorkspaceSchema);

@@ -153,7 +153,7 @@ router.post('/enhanced-icp/:workspaceId', auth, async (req, res) => {
         industry: segment.industry || '',
         companySize: segment.companySize || '',
         geography: segment.geography || '',
-        awarenessLevel: segment.awarenessLevel || 'Solution Aware',
+        awarenessLevel: Array.isArray(segment.awarenessLevel) ? segment.awarenessLevel.filter(level => typeof level === 'string' && level.trim()) : ['Solution Aware'],
         priority: segment.priority || 'medium',
         status: segment.status || 'active',
         // Filter out empty strings from segment arrays

@@ -4,6 +4,32 @@ const fetch = require('node-fetch');
 // Groq API Key (set GROQ_API_KEY in your environment)
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
+// Helper function to clean unwanted characters from AI responses
+function cleanAIResponse(text) {
+  if (!text || typeof text !== 'string') return text;
+  
+  return text
+    // Remove markdown formatting
+    .replace(/\*\*/g, '') // Remove bold markdown
+    .replace(/\*/g, '') // Remove asterisks
+    .replace(/`/g, '') // Remove backticks
+    .replace(/#{1,6}\s*/g, '') // Remove markdown headers
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert markdown links to plain text
+    
+    // Clean up unwanted punctuation patterns
+    .replace(/,\s*\*/g, ',') // Remove ", *" patterns
+    .replace(/\*\s*,/g, ',') // Remove "*, " patterns
+    .replace(/\s*\*\s*/g, ' ') // Remove standalone asterisks
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
+// Helper function to clean arrays
+function cleanAIResponseArray(arr) {
+  if (!Array.isArray(arr)) return arr;
+  return arr.map(item => typeof item === 'string' ? cleanAIResponse(item) : item);
+}
+
 const styleVariants = [
   "Focus on strategic depth and market positioning for large enterprise buyers.",
   "Emphasize tactical implementation, speed-to-value, and practical recommendations.",
@@ -62,7 +88,49 @@ async function callClaudeForICP(inputs) {
       const data = await res.json();
 
       try {
-        return JSON.parse(data?.choices?.[0]?.message?.content || '{}');
+        const content = cleanAIResponse(data?.choices?.[0]?.message?.content || '{}');
+        const parsed = JSON.parse(content);
+        
+        // Clean all arrays in the parsed object
+        if (parsed.products && parsed.products.problems) {
+          parsed.products.problems = cleanAIResponseArray(parsed.products.problems);
+        }
+        if (parsed.products && parsed.products.features) {
+          parsed.products.features = cleanAIResponseArray(parsed.products.features);
+        }
+        if (parsed.products && parsed.products.usp) {
+          parsed.products.usp = cleanAIResponseArray(parsed.products.usp);
+        }
+        if (parsed.products && parsed.products.whyNow) {
+          parsed.products.whyNow = cleanAIResponseArray(parsed.products.whyNow);
+        }
+        if (parsed.competitorDomains) {
+          parsed.competitorDomains = cleanAIResponseArray(parsed.competitorDomains);
+        }
+        if (parsed.salesDeckIdeas) {
+          parsed.salesDeckIdeas = cleanAIResponseArray(parsed.salesDeckIdeas);
+        }
+        if (parsed.caseStudies) {
+          parsed.caseStudies = cleanAIResponseArray(parsed.caseStudies);
+        }
+        if (parsed.ctaOptions) {
+          parsed.ctaOptions = cleanAIResponseArray(parsed.ctaOptions);
+        }
+        if (parsed.segments) {
+          parsed.segments = cleanAIResponseArray(parsed.segments);
+        }
+        if (parsed.personasTable) {
+          parsed.personasTable = cleanAIResponseArray(parsed.personasTable);
+        }
+        
+        // Clean text fields
+        if (parsed.oneLiner) parsed.oneLiner = cleanAIResponse(parsed.oneLiner);
+        if (parsed.companySummary) parsed.companySummary = cleanAIResponse(parsed.companySummary);
+        if (parsed.products && parsed.products.solution) {
+          parsed.products.solution = cleanAIResponse(parsed.products.solution);
+        }
+        
+        return parsed;
       } catch (err) {
         console.error('Error parsing Claude response for variant', variant, err);
         return null;
@@ -101,15 +169,15 @@ IMPORTANT: Return ONLY a valid JSON array of exactly 4 strings. No explanation, 
 Example format: ["Request a demo", "Download whitepaper", "Join webinar", "Start free trial"]`,
     description: `Based on the company domain "${domain}", write a concise 2-3 sentence product description that explains what the company does and their main value proposition. Focus on their core business and target market.
 
-IMPORTANT: Return ONLY the description text. No JSON, no explanation, just the description.`,
+IMPORTANT: Return ONLY the clean description text. No JSON, no explanation, no asterisks (*), no markdown formatting, just plain text.`,
 
     category: `Based on the company domain "${domain}" and description "${cumulativeData.description || ''}", suggest the most appropriate product category. Choose from common categories like: SaaS, Healthcare, Fintech, E-commerce, EdTech, Marketing, Sales, HR, Operations, Security, etc.
 
-IMPORTANT: Return ONLY the category name. No JSON, no explanation, just the category.`,
+IMPORTANT: Return ONLY the clean category name. No JSON, no explanation, no asterisks (*), no markdown formatting, just plain text.`,
 
     valueProposition: `Based on the domain "${domain}", description "${cumulativeData.description || ''}", and category "${cumulativeData.category || ''}", create a compelling value proposition in 40-50 characters. Focus on the main benefit customers get.
 
-IMPORTANT: Return ONLY the value proposition text. No JSON, no explanation, just the text.`,
+IMPORTANT: Return ONLY the clean value proposition text. No JSON, no explanation, no asterisks (*), no markdown formatting, just plain text.`,
 
     valuePropositionVariations: `Based on the domain "${domain}" and main value proposition "${cumulativeData.valueProposition || ''}", suggest exactly 4 alternative value propositions for different market segments or use cases.
 
@@ -305,20 +373,23 @@ Example format: ["Consequence 1", "Consequence 2", "Consequence 3", "Consequence
       throw new Error('No content received from AI');
     }
 
+    // Clean the content first
+    const cleanedContent = cleanAIResponse(content);
+
     // For array fields, try to parse as JSON
     if (['valuePropositionVariations', 'problemsWithRootCauses', 'keyFeatures', 'businessOutcomes', 'useCases', 'uniqueSellingPoints', 'urgencyConsequences', 'pricingTiers', 'clientTimeline', 'roiRequirements', 'segmentName', 'segmentIndustry', 'segmentCompanySize', 'segmentGeography', 'personaTitle', 'personaSeniority', 'personaResponsibilities', 'personaChallenges', 'personaOKRs', 'segmentEmployees', 'segmentLocations', 'segmentSignals', 'segmentBenefits', 'segmentCTA', 'segmentTier1Criteria', 'segmentDisqualifying'].includes(fieldType)) {
       try {
-        const parsed = JSON.parse(content);
-        return Array.isArray(parsed) ? parsed : [content];
+        const parsed = JSON.parse(cleanedContent);
+        return Array.isArray(parsed) ? cleanAIResponseArray(parsed) : [cleanedContent];
       } catch (e) {
         // If JSON parsing fails, return as single item array
-        console.warn(`Failed to parse JSON for ${fieldType}, treating as single item:`, content);
-        return [content];
+        console.warn(`Failed to parse JSON for ${fieldType}, treating as single item:`, cleanedContent);
+        return [cleanedContent];
       }
     }
 
-    // For single value fields, return the content directly
-    return content;
+    // For single value fields, return the cleaned content directly
+    return cleanedContent;
 
   } catch (error) {
     console.error(`Error generating ${fieldType} suggestions:`, error);
@@ -401,7 +472,7 @@ async function generateStepContent(currentStep, formData, companyName) {
       return { success: false, error: 'No response from Groq' };
     }
 
-    const responseText = data.choices[0].message.content.trim();
+    const responseText = cleanAIResponse(data.choices[0].message.content.trim());
 
     if (currentStep === 4) {
       // Step 4 expects a plain string, not JSON
@@ -411,14 +482,14 @@ async function generateStepContent(currentStep, formData, companyName) {
     try {
       // Try to parse as JSON for all other steps
       const suggestions = JSON.parse(responseText);
-      return { success: true, suggestions };
+      return { success: true, suggestions: Array.isArray(suggestions) ? cleanAIResponseArray(suggestions) : suggestions };
     } catch (err) {
       // Try to extract JSON from the response if possible
       const jsonMatch = responseText.match(/\[.*\]/);
       if (jsonMatch) {
         try {
           const suggestions = JSON.parse(jsonMatch[0]);
-          return { success: true, suggestions };
+          return { success: true, suggestions: Array.isArray(suggestions) ? cleanAIResponseArray(suggestions) : suggestions };
         } catch (extractErr) {
           // ignore
         }
@@ -483,17 +554,25 @@ Return ONLY valid JSON with these exact fields:
     });
 
     const data = await res.json();
-    const responseText = data?.choices?.[0]?.message?.content || '{}';
+    const responseText = cleanAIResponse(data?.choices?.[0]?.message?.content || '{}');
     try {
       let parsed = JSON.parse(responseText);
-      // Truncate all arrays to 4 items
-      parsed.painPoints = (parsed.painPoints || []).slice(0, 4);
-      parsed.goals = (parsed.goals || []).slice(0, 4);
-      parsed.responsibilities = (parsed.responsibilities || []).slice(0, 4);
-      parsed.challenges = (parsed.challenges || []).slice(0, 4);
-      parsed.channels = (parsed.channels || []).slice(0, 4);
-      parsed.triggers = (parsed.triggers || []).slice(0, 4);
-      parsed.objections = (parsed.objections || []).slice(0, 4);
+      // Truncate all arrays to 4 items and clean them
+      parsed.painPoints = cleanAIResponseArray((parsed.painPoints || []).slice(0, 4));
+      parsed.goals = cleanAIResponseArray((parsed.goals || []).slice(0, 4));
+      parsed.responsibilities = cleanAIResponseArray((parsed.responsibilities || []).slice(0, 4));
+      parsed.challenges = cleanAIResponseArray((parsed.challenges || []).slice(0, 4));
+      parsed.channels = cleanAIResponseArray((parsed.channels || []).slice(0, 4));
+      parsed.triggers = cleanAIResponseArray((parsed.triggers || []).slice(0, 4));
+      parsed.objections = cleanAIResponseArray((parsed.objections || []).slice(0, 4));
+      // Clean demographics text fields
+      if (parsed.demographics) {
+        Object.keys(parsed.demographics).forEach(key => {
+          if (typeof parsed.demographics[key] === 'string') {
+            parsed.demographics[key] = cleanAIResponse(parsed.demographics[key]);
+          }
+        });
+      }
       return { success: true, data: parsed };
     } catch (parseError) {
       return { success: false, error: 'Failed to parse Claude response' };
@@ -554,20 +633,30 @@ Return ONLY valid JSON with these exact fields:
     });
 
     const data = await res.json();
-    const responseText = data?.choices?.[0]?.message?.content || '{}';
+    const responseText = cleanAIResponse(data?.choices?.[0]?.message?.content || '{}');
     try {
       let parsed = JSON.parse(responseText);
-      // Truncate all arrays to 4 items
-      parsed.characteristics = (parsed.characteristics || []).slice(0, 4);
-      parsed.painPoints = (parsed.painPoints || []).slice(0, 4);
+      // Truncate all arrays to 4 items and clean them
+      parsed.characteristics = cleanAIResponseArray((parsed.characteristics || []).slice(0, 4));
+      parsed.painPoints = cleanAIResponseArray((parsed.painPoints || []).slice(0, 4));
+      // Clean text fields
+      if (parsed.marketSize) parsed.marketSize = cleanAIResponse(parsed.marketSize);
+      if (parsed.growthRate) parsed.growthRate = cleanAIResponse(parsed.growthRate);
+      
       if (parsed.buyingBehavior) {
-        parsed.buyingBehavior.decisionMakers = (parsed.buyingBehavior.decisionMakers || []).slice(0, 4);
-        parsed.buyingBehavior.evaluationCriteria = (parsed.buyingBehavior.evaluationCriteria || []).slice(0, 4);
+        if (parsed.buyingBehavior.decisionTimeframe) {
+          parsed.buyingBehavior.decisionTimeframe = cleanAIResponse(parsed.buyingBehavior.decisionTimeframe);
+        }
+        if (parsed.buyingBehavior.budgetRange) {
+          parsed.buyingBehavior.budgetRange = cleanAIResponse(parsed.buyingBehavior.budgetRange);
+        }
+        parsed.buyingBehavior.decisionMakers = cleanAIResponseArray((parsed.buyingBehavior.decisionMakers || []).slice(0, 4));
+        parsed.buyingBehavior.evaluationCriteria = cleanAIResponseArray((parsed.buyingBehavior.evaluationCriteria || []).slice(0, 4));
       }
       if (parsed.qualification) {
-        parsed.qualification.idealCriteria = (parsed.qualification.idealCriteria || []).slice(0, 4);
-        parsed.qualification.disqualifyingCriteria = (parsed.qualification.disqualifyingCriteria || []).slice(0, 4);
-        parsed.qualification.lookalikeCompanies = (parsed.qualification.lookalikeCompanies || []).slice(0, 4);
+        parsed.qualification.idealCriteria = cleanAIResponseArray((parsed.qualification.idealCriteria || []).slice(0, 4));
+        parsed.qualification.disqualifyingCriteria = cleanAIResponseArray((parsed.qualification.disqualifyingCriteria || []).slice(0, 4));
+        parsed.qualification.lookalikeCompanies = cleanAIResponseArray((parsed.qualification.lookalikeCompanies || []).slice(0, 4));
       }
       return { success: true, data: parsed };
     } catch (parseError) {
@@ -626,19 +715,25 @@ Return ONLY valid JSON with these exact fields:
     });
 
     const data = await res.json();
-    const responseText = data?.choices?.[0]?.message?.content || '{}';
+    const responseText = cleanAIResponse(data?.choices?.[0]?.message?.content || '{}');
     try {
       let parsed = JSON.parse(responseText);
-      // Truncate all arrays to 4 items
-      parsed.features = (parsed.features || []).slice(0, 4);
-      parsed.problems = (parsed.problems || []).slice(0, 4);
-      parsed.usps = (parsed.usps || []).slice(0, 4);
-      parsed.useCases = (parsed.useCases || []).slice(0, 4);
-      parsed.benefits = (parsed.benefits || []).slice(0, 4);
-      parsed.competitiveAdvantages = (parsed.competitiveAdvantages || []).slice(0, 4);
+      // Truncate all arrays to 4 items and clean them
+      parsed.features = cleanAIResponseArray((parsed.features || []).slice(0, 4));
+      parsed.problems = cleanAIResponseArray((parsed.problems || []).slice(0, 4));
+      parsed.usps = cleanAIResponseArray((parsed.usps || []).slice(0, 4));
+      parsed.useCases = cleanAIResponseArray((parsed.useCases || []).slice(0, 4));
+      parsed.benefits = cleanAIResponseArray((parsed.benefits || []).slice(0, 4));
+      parsed.competitiveAdvantages = cleanAIResponseArray((parsed.competitiveAdvantages || []).slice(0, 4));
       if (parsed.implementation) {
-        parsed.implementation.requirements = (parsed.implementation.requirements || []).slice(0, 4);
-        parsed.implementation.successFactors = (parsed.implementation.successFactors || []).slice(0, 4);
+        if (parsed.implementation.timeToValue) {
+          parsed.implementation.timeToValue = cleanAIResponse(parsed.implementation.timeToValue);
+        }
+        if (parsed.implementation.complexity) {
+          parsed.implementation.complexity = cleanAIResponse(parsed.implementation.complexity);
+        }
+        parsed.implementation.requirements = cleanAIResponseArray((parsed.implementation.requirements || []).slice(0, 4));
+        parsed.implementation.successFactors = cleanAIResponseArray((parsed.implementation.successFactors || []).slice(0, 4));
       }
       return { success: true, data: parsed };
     } catch (parseError) {
@@ -885,7 +980,7 @@ Return ONLY a JSON array of the improved items. No explanation, no markdown, jus
     });
 
     const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content?.trim();
+    const content = cleanAIResponse(data?.choices?.[0]?.message?.content?.trim());
 
     if (!content) {
       console.warn(`No content received for refinement of ${inputType}`);
@@ -896,7 +991,7 @@ Return ONLY a JSON array of the improved items. No explanation, no markdown, jus
     if (inputType === 'batchTextArray') {
       try {
         const parsed = JSON.parse(content);
-        return { success: true, data: Array.isArray(parsed) ? parsed : [content] };
+        return { success: true, data: Array.isArray(parsed) ? cleanAIResponseArray(parsed) : [content] };
       } catch (e) {
         console.warn(`Failed to parse array refinement for ${inputType}:`, content);
         return { success: true, data: Array.isArray(userInput) ? userInput : [userInput] };
@@ -991,6 +1086,8 @@ module.exports = {
   generateProductDetails,
   generateProductFieldSuggestions,
   refineUserInput,
-  refineComplexObject
+  refineComplexObject,
+  cleanAIResponse,
+  cleanAIResponseArray
 };
 
